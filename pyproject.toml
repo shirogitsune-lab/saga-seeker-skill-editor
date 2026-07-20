@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "saga-seeker-skill-editor"
-version = "1.0.0"
-description = "A local Windows GUI skill editor for Saga & Seeker character sheet HTML files."
+version = "1.1.0"
+description = "A local Windows GUI editor for Saga & Seeker character sheet skills and personality keywords."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
@@ -31,7 +31,7 @@ saga-seeker-skill-editor = "saga_seeker_skill_editor.main:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-saga_seeker_skill_editor = ["gui/styles/*.qss"]
+saga_seeker_skill_editor = ["gui/styles/*.qss", "data/*.csv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

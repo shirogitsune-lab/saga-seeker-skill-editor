@@ -165,7 +165,9 @@ def test_main_window_reports_registered_and_vacant_slots(tmp_path: Path) -> None
 
     assert window.sheet is not None
     assert window.sheet.read_only is False
-    assert window.slot_summary_label.text() == "スキル欄: 登録済み 1 / 全6枠 | 未使用枠 5"
+    assert window.slot_summary_label.text() == (
+        "スキル欄: 登録済み 1 / 全6枠 | 未使用枠 5 | 性格キーワード 0 / 6件"
+    )
     assert window.skill_widgets[0].action_button.isEnabled()
     assert window.skill_list.topLevelItemCount() == 6
     assert len(window.skill_widgets) == 6

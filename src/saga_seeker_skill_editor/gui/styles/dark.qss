@@ -83,7 +83,7 @@ QPushButton[role="danger"] {
     border-color: @DANGER@;
     color: @DANGER_TEXT@;
 }
-QLineEdit, QTextEdit {
+QLineEdit, QTextEdit, QComboBox {
     background: @INPUT@;
     color: @TEXT@;
     border: @BORDER_WIDTH@ solid @BORDER@;
@@ -95,13 +95,24 @@ QLineEdit {
     min-height: 30px;
     padding: 2px 7px;
 }
+QComboBox {
+    min-height: 30px;
+    padding: 2px 7px;
+}
+QComboBox QAbstractItemView {
+    background: @INPUT@;
+    color: @TEXT@;
+    selection-background-color: @SELECTION@;
+    selection-color: @SELECTION_TEXT@;
+    border: @BORDER_WIDTH@ solid @BORDER@;
+}
 QTextEdit {
     padding: 6px;
 }
-QLineEdit:focus, QTextEdit:focus, QTreeWidget:focus {
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QTreeWidget:focus {
     border: @FOCUS_WIDTH@ solid @FOCUS@;
 }
-QLineEdit:disabled, QTextEdit:disabled {
+QLineEdit:disabled, QTextEdit:disabled, QComboBox:disabled {
     background: @DISABLED_BACKGROUND@;
     color: @DISABLED@;
     border-color: @BORDER@;
@@ -159,4 +170,22 @@ QMenu::separator {
 }
 QRadioButton:disabled, QCheckBox:disabled {
     color: @DISABLED@;
+}
+QTabWidget::pane {
+    border: @BORDER_WIDTH@ solid @BORDER@;
+    background: @BACKGROUND@;
+}
+QTabBar::tab {
+    background: @BUTTON@;
+    color: @TEXT@;
+    border: @BORDER_WIDTH@ solid @BORDER@;
+    padding: 7px 16px;
+}
+QTabBar::tab:selected {
+    background: @PANEL@;
+    border-bottom: @FOCUS_WIDTH@ solid @FOCUS@;
+    font-weight: 600;
+}
+QTabBar::tab:focus {
+    border: @FOCUS_WIDTH@ solid @FOCUS@;
 }

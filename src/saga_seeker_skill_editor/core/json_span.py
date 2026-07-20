@@ -23,19 +23,39 @@ class SkillsArraySpans:
     skill_objects: list[JsonValueSpan]
 
 
+@dataclass(frozen=True)
+class ObjectArraySpans:
+    data_object: JsonValueSpan
+    array: JsonValueSpan
+    objects: list[JsonValueSpan]
+
+
 def locate_skills_array(json_bytes: bytes) -> SkillsArraySpans:
+    located = locate_data_object_array(json_bytes, "skills")
+    return SkillsArraySpans(
+        data_object=located.data_object,
+        skills_array=located.array,
+        skill_objects=located.objects,
+    )
+
+
+def locate_personalities_array(json_bytes: bytes) -> ObjectArraySpans:
+    return locate_data_object_array(json_bytes, "personalities")
+
+
+def locate_data_object_array(json_bytes: bytes, key: str) -> ObjectArraySpans:
     data_span = find_object_key_value(json_bytes, "data", expected_start=b"{")
-    skills_span = find_object_key_value(
+    array_span = find_object_key_value(
         json_bytes[data_span.start : data_span.end],
-        "skills",
+        key,
         expected_start=b"[",
     )
-    absolute_skills = JsonValueSpan(data_span.start + skills_span.start, data_span.start + skills_span.end)
+    absolute_array = JsonValueSpan(data_span.start + array_span.start, data_span.start + array_span.end)
     objects = [
-        JsonValueSpan(absolute_skills.start + span.start, absolute_skills.start + span.end)
-        for span in direct_array_object_spans(json_bytes[absolute_skills.start : absolute_skills.end])
+        JsonValueSpan(absolute_array.start + span.start, absolute_array.start + span.end)
+        for span in direct_array_object_spans(json_bytes[absolute_array.start : absolute_array.end])
     ]
-    return SkillsArraySpans(data_object=data_span, skills_array=absolute_skills, skill_objects=objects)
+    return ObjectArraySpans(data_object=data_span, array=absolute_array, objects=objects)
 
 
 def find_object_key_value(object_bytes: bytes, key: str, *, expected_start: bytes | None = None) -> JsonValueSpan:
@@ -84,12 +104,12 @@ def direct_array_object_spans(array_bytes: bytes) -> list[JsonValueSpan]:
             i += 1
             continue
         if array_bytes[i] != 0x7B:
-            raise JsonSpanError("skills array contains a non-object item")
+            raise JsonSpanError("array contains a non-object item")
         object_end = skip_value(array_bytes, i)
         spans.append(JsonValueSpan(i, object_end))
         i = skip_ws(array_bytes, object_end)
         if i < end - 1 and array_bytes[i] not in (0x2C,):
-            raise JsonSpanError("expected comma after skills array item")
+            raise JsonSpanError("expected comma after array item")
     return spans
 
 

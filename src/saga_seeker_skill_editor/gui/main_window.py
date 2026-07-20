@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QStackedWidget,
     QStyle,
+    QTabWidget,
     QApplication,
     QVBoxLayout,
     QWidget,
@@ -28,6 +29,13 @@ from PySide6.QtWidgets import (
 
 from saga_seeker_skill_editor.core.character_sheet import CharacterSheet, CharacterSheetError, load_character_sheet
 from saga_seeker_skill_editor.core.file_writer import SaveError, atomic_save_bytes
+from saga_seeker_skill_editor.core.personality_catalog import (
+    PersonalityCatalogError,
+    load_personality_catalog,
+)
+from saga_seeker_skill_editor.core.personality_editor import (
+    render_personality_selections,
+)
 from saga_seeker_skill_editor.core.sheet_editor import (
     SheetEditError,
     render_empty_slot_creation,
@@ -38,6 +46,7 @@ from saga_seeker_skill_editor.core.sheet_editor import (
 )
 from saga_seeker_skill_editor.core.skill_classifier import SkillKind
 from saga_seeker_skill_editor.gui.collapsible_section import CollapsibleSection
+from saga_seeker_skill_editor.gui.personality_editor_widget import PersonalityEditorWidget
 from saga_seeker_skill_editor.gui.skill_editor_widget import SkillEditorWidget
 from saga_seeker_skill_editor.gui.skill_list_widget import SkillListWidget
 from saga_seeker_skill_editor.gui.theme_manager import DEFAULT_THEME, ThemeId, ThemeManager, refresh_widget_style
@@ -82,9 +91,16 @@ class MainWindow(QMainWindow):
         self.current_path: Path | None = None
         self.sheet: CharacterSheet | None = None
         self.skill_widgets: list[SkillEditorWidget | VacantSlotEditorWidget] = []
+        try:
+            self.personality_catalog = load_personality_catalog()
+            self.personality_catalog_error = ""
+        except PersonalityCatalogError as exc:
+            self.personality_catalog = ()
+            self.personality_catalog_error = str(exc)
         self.active_error: UiError | None = None
         self.validation_error: str | None = None
         self.changed_indices: set[int] = set()
+        self.personality_changed_indices: set[int] = set()
         self.main_state = MainState.UNLOADED
 
         self._create_actions()
@@ -107,7 +123,13 @@ class MainWindow(QMainWindow):
 
     @property
     def unsaved_changes(self) -> bool:
-        return bool(self.changed_indices)
+        return self._has_changes()
+
+    def _has_changes(self) -> bool:
+        return bool(self.changed_indices or self.personality_changed_indices)
+
+    def _change_count(self) -> int:
+        return len(self.changed_indices) + len(self.personality_changed_indices)
 
     def _create_actions(self) -> None:
         self.open_action = QAction("HTMLファイルを開く", self)
@@ -221,10 +243,26 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([500, 600])
 
+        skill_page = QWidget()
+        skill_layout = QVBoxLayout(skill_page)
+        skill_layout.setContentsMargins(0, 0, 0, 0)
+        skill_layout.addWidget(splitter)
+
+        self.personality_editor = PersonalityEditorWidget(self.personality_catalog)
+        self.personality_editor.changed.connect(self._recalculate_changes)
+        personality_scroll = QScrollArea()
+        personality_scroll.setWidgetResizable(True)
+        personality_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        personality_scroll.setWidget(self.personality_editor)
+
+        self.edit_tabs = QTabWidget()
+        self.edit_tabs.addTab(skill_page, "スキル")
+        self.edit_tabs.addTab(personality_scroll, "性格キーワード")
+
         self.loaded_page = QWidget()
         loaded_layout = QVBoxLayout(self.loaded_page)
         loaded_layout.setContentsMargins(0, 0, 0, 0)
-        loaded_layout.addWidget(splitter)
+        loaded_layout.addWidget(self.edit_tabs)
 
         self.content_stack.addWidget(self.empty_page)
         self.content_stack.addWidget(self.loaded_page)
@@ -236,11 +274,13 @@ class MainWindow(QMainWindow):
         self.status_detail_label = QLabel("HTMLファイルを開いてください")
         self.status_detail_label.setObjectName("mutedText")
         self.read_only_badge = QLabel("読み取り専用")
+        self.personality_read_only_badge = QLabel("性格キーワード読み取り専用")
         self.protected_badge = QLabel("一部保護中")
         self.id_repair_badge = QLabel("ID修復が必要")
         self.changed_count_label = QLabel("変更 0件")
         for badge in (
             self.read_only_badge,
+            self.personality_read_only_badge,
             self.protected_badge,
             self.id_repair_badge,
             self.changed_count_label,
@@ -260,6 +300,7 @@ class MainWindow(QMainWindow):
 
         badges = QHBoxLayout()
         badges.addWidget(self.read_only_badge)
+        badges.addWidget(self.personality_read_only_badge)
         badges.addWidget(self.protected_badge)
         badges.addWidget(self.id_repair_badge)
         badges.addWidget(self.changed_count_label)
@@ -370,10 +411,14 @@ class MainWindow(QMainWindow):
         self.file_label.setToolTip(str(path))
         self.slot_summary_label.setText(
             f"スキル欄: 登録済み {len(sheet.entries)} / 全{sheet.slot_count}枠 | "
-            f"未使用枠 {sheet.vacant_slot_count}"
+            f"未使用枠 {sheet.vacant_slot_count} | "
+            f"性格キーワード {len(sheet.personality_entries)} / {sheet.personality_slot_count or 6}件"
         )
         self.path_value.setText(str(path))
         self._rebuild_skill_widgets()
+        self.personality_editor.set_sheet(sheet)
+        if self.personality_catalog_error:
+            self.personality_editor.set_validation_error(self.personality_catalog_error)
         self.content_stack.setCurrentWidget(self.loaded_page)
         self._recalculate_changes()
         if self.skill_list.topLevelItemCount():
@@ -381,7 +426,7 @@ class MainWindow(QMainWindow):
 
     def save_as(self) -> bool:
         self._recalculate_changes()
-        if self.sheet is None or not self.changed_indices or self.sheet.read_only:
+        if self.sheet is None or not self._has_changes() or self.sheet.read_only:
             return False
         if self.validation_error is not None:
             self._present_validation_error(self.validation_error)
@@ -436,13 +481,14 @@ class MainWindow(QMainWindow):
     def _choose_save_path(self) -> Path | None:
         if self.sheet is None:
             return None
-        default_name = f"{self.sheet.character_name or 'character'}_スキル編集済み.html"
+        default_name = f"{self.sheet.character_name or 'character'}_編集済み.html"
         path, _ = QFileDialog.getSaveFileName(self, "別名で保存", default_name, "HTML Files (*.html)")
         return Path(path) if path else None
 
     def reset_edits(self) -> None:
         for widget in self.skill_widgets:
             widget.reset()
+        self.personality_editor.reset()
         self.active_error = None
         self.validation_error = None
         self._recalculate_changes()
@@ -456,7 +502,7 @@ class MainWindow(QMainWindow):
 
     def _resolve_unsaved_changes(self) -> bool:
         self._recalculate_changes()
-        if not self.changed_indices:
+        if not self._has_changes():
             return True
         choice = self._ask_unsaved_action()
         if choice == LeaveChoice.CANCEL:
@@ -469,7 +515,7 @@ class MainWindow(QMainWindow):
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
         box.setWindowTitle("未保存の変更")
-        box.setText(f"{len(self.changed_indices)}件の未保存変更があります。")
+        box.setText(f"{self._change_count()}件の未保存変更があります。")
         box.setInformativeText("別のHTMLを開く前または終了する前に、変更の扱いを選択してください。")
         save_button = box.addButton("別名で保存", QMessageBox.ButtonRole.AcceptRole)
         discard_button = box.addButton("変更を破棄", QMessageBox.ButtonRole.DestructiveRole)
@@ -534,6 +580,12 @@ class MainWindow(QMainWindow):
                     name=state.name,
                     description=state.description,
                 )
+        if self.personality_changed_indices:
+            current = render_personality_selections(
+                load_character_sheet(current),
+                keyword_ids=self.personality_editor.selected_ids(),
+                catalog=self.personality_catalog,
+            )
         return current
 
     def _rebuild_skill_widgets(self) -> None:
@@ -585,7 +637,7 @@ class MainWindow(QMainWindow):
                         f"スロット {index + 1} が空欄です。"
                         "スキルは前の枠から連続するように名前を入力してください。"
                     )
-        self.validation_error = next(iter(validation_errors.values()), None)
+        skill_validation_error = next(iter(validation_errors.values()), None)
         for widget, state in zip(self.skill_widgets, states, strict=True):
             if state.changed:
                 changed.add(state.index)
@@ -603,6 +655,33 @@ class MainWindow(QMainWindow):
                 self.skill_list.update_name(state.index, state.name)
                 widget.set_delete_available(not has_creation or state.deletion_requested)
         self.changed_indices = changed
+        self.personality_changed_indices = self.personality_editor.changed_indices()
+        personality_validation_error = None
+        personality_ids = self.personality_editor.selected_ids()
+        first_empty = next(
+            (index for index, keyword_id in enumerate(personality_ids) if keyword_id is None),
+            len(personality_ids),
+        )
+        if any(keyword_id is not None for keyword_id in personality_ids[first_empty:]):
+            personality_validation_error = (
+                f"性格キーワードの{first_empty + 1}枠目が未設定です。"
+                "後ろの枠を使う場合は、手前の枠から連続して選択してください。"
+            )
+        assigned_personality_ids = [keyword_id for keyword_id in personality_ids if keyword_id is not None]
+        if len(assigned_personality_ids) != len(set(assigned_personality_ids)):
+            personality_validation_error = "同じ性格キーワードを複数の枠へ設定することはできません。"
+        if self.personality_changed_indices and self.sheet is not None:
+            if self.sheet.personality_read_only:
+                personality_validation_error = self.sheet.personality_read_only_reason
+            elif self.personality_catalog_error:
+                personality_validation_error = self.personality_catalog_error
+        personality_display_error = personality_validation_error
+        if personality_display_error is None and self.sheet is not None and self.sheet.personality_read_only:
+            personality_display_error = (
+                f"性格キーワードは読み取り専用です: {self.sheet.personality_read_only_reason}"
+            )
+        self.personality_editor.set_validation_error(personality_display_error)
+        self.validation_error = skill_validation_error or personality_validation_error
         self._sync_ui_state()
 
     def _on_skill_selected(self, current, _previous) -> None:
@@ -613,6 +692,9 @@ class MainWindow(QMainWindow):
         self.editor_stack.setCurrentIndex(0 if index is None else index + 1)
 
     def _toggle_pane_focus(self) -> None:
+        if self.edit_tabs.currentIndex() == 1:
+            self.personality_editor.focus_first_slot()
+            return
         if self.skill_list.hasFocus():
             index = self.skill_list.selected_skill_index()
             if index is not None:
@@ -628,8 +710,8 @@ class MainWindow(QMainWindow):
     def _present_validation_error(self, message: str) -> None:
         QMessageBox.warning(
             self,
-            "スキルの追加順を確認してください",
-            message + "\n空欄を修正してから、もう一度保存してください。",
+            "入力内容を確認してください",
+            message + "\n内容を修正してから、もう一度保存してください。",
         )
 
     def _present_error_dialog(self, error: UiError) -> None:
@@ -646,7 +728,7 @@ class MainWindow(QMainWindow):
             state = MainState.ERROR
         elif self.sheet is None:
             state = MainState.UNLOADED
-        elif self.changed_indices:
+        elif self._has_changes():
             state = MainState.DIRTY
         else:
             state = MainState.NORMAL
@@ -674,10 +756,12 @@ class MainWindow(QMainWindow):
             self.status_detail_label.setText(self.validation_error)
         elif self.sheet is None:
             self.status_detail_label.setText("HTMLファイルを開いてください")
-        elif self.changed_indices:
+        elif self._has_changes():
             self.status_detail_label.setText("編集内容はまだファイルへ保存されていません")
         elif self.sheet.read_only:
             self.status_detail_label.setText("安全に分類できない箇所があるため編集機能を制限しています")
+        elif self.sheet.personality_read_only:
+            self.status_detail_label.setText("スキルは編集できますが、性格キーワード欄は読み取り専用です")
         else:
             self.status_detail_label.setText("キャラクターシートを安全に編集できます")
 
@@ -689,14 +773,17 @@ class MainWindow(QMainWindow):
                 1 for entry in self.sheet.entries if entry.classification.kind == SkillKind.ORIGINAL_NEEDS_ID_REPAIR
             )
         self.read_only_badge.setVisible(bool(self.sheet and self.sheet.read_only))
+        self.personality_read_only_badge.setVisible(
+            bool(self.sheet and self.sheet.personality_read_only)
+        )
         self.protected_badge.setVisible(default_count > 0)
         self.protected_badge.setText(f"一部保護中 {default_count}件")
         self.id_repair_badge.setVisible(id_repair_count > 0)
         self.id_repair_badge.setText(f"ID修復が必要 {id_repair_count}件")
         self.changed_count_label.setVisible(bool(self.sheet))
-        self.changed_count_label.setText(f"変更 {len(self.changed_indices)}件")
+        self.changed_count_label.setText(f"変更 {self._change_count()}件")
 
-        can_save = bool(self.sheet and self.changed_indices and not self.sheet.read_only)
+        can_save = bool(self.sheet and self._has_changes() and not self.sheet.read_only)
         self.save_action.setEnabled(can_save)
         self.save_button.setEnabled(can_save)
         self.save_button.setProperty("role", "primary" if can_save else "secondary")
@@ -705,7 +792,7 @@ class MainWindow(QMainWindow):
             save_tooltip = "HTMLファイルが未読込のため保存できません"
         elif self.sheet.read_only:
             save_tooltip = f"読み取り専用のため保存できません: {self.sheet.read_only_reason}"
-        elif not self.changed_indices:
+        elif not self._has_changes():
             save_tooltip = "変更がないため保存できません"
         elif self.validation_error is not None:
             save_tooltip = "保存前に、途中の空欄を修正してください"
@@ -714,14 +801,14 @@ class MainWindow(QMainWindow):
         self.save_button.setToolTip(save_tooltip)
         self.save_action.setToolTip(save_tooltip)
 
-        self.reset_button.setEnabled(bool(self.changed_indices))
+        self.reset_button.setEnabled(self._has_changes())
         self.reset_button.setToolTip(
-            "すべての変更を基準状態へ戻します" if self.changed_indices else "破棄する変更はありません"
+            "すべての変更を基準状態へ戻します" if self._has_changes() else "破棄する変更はありません"
         )
         self.reload_action.setEnabled(self.current_path is not None)
         self.reload_button.setEnabled(self.current_path is not None)
         self.content_stack.setCurrentWidget(self.empty_page if self.sheet is None else self.loaded_page)
         self.open_button.setProperty("role", "primary" if self.sheet is None else "secondary")
         refresh_widget_style(self.open_button)
-        suffix = " *" if self.changed_indices else ""
+        suffix = " *" if self._has_changes() else ""
         self.setWindowTitle(f"Saga & Seeker スキルエディター{suffix}")

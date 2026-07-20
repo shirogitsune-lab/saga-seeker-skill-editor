@@ -32,8 +32,9 @@ if ($Mode -eq "onedir") {
     $SpecPath = Join-Path $Root "work\pyinstaller-spec"
     $IconPath = Join-Path $Root "assets\kanaria.ico"
     $StylesPath = Join-Path $Root "src\saga_seeker_skill_editor\gui\styles"
+    $DataPath = Join-Path $Root "src\saga_seeker_skill_editor\data"
     New-Item -ItemType Directory -Force -Path $SpecPath | Out-Null
-    & $Python -m PyInstaller --clean --noconfirm --onedir --windowed --icon $IconPath --add-data "$IconPath;assets" --add-data "$StylesPath;saga_seeker_skill_editor/gui/styles" --specpath $SpecPath --name SagaSeekerSkillEditor "src\saga_seeker_skill_editor\main.py"
+    & $Python -m PyInstaller --clean --noconfirm --onedir --windowed --icon $IconPath --add-data "$IconPath;assets" --add-data "$StylesPath;saga_seeker_skill_editor/gui/styles" --add-data "$DataPath;saga_seeker_skill_editor/data" --specpath $SpecPath --name SagaSeekerSkillEditor "src\saga_seeker_skill_editor\main.py"
 } else {
     & $Python -m PyInstaller --clean --noconfirm SagaSeekerSkillEditor.spec
 }

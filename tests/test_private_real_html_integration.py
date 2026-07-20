@@ -8,6 +8,8 @@ import pytest
 
 from saga_seeker_skill_editor.core.character_sheet import CharacterSheetError, load_character_sheet
 from saga_seeker_skill_editor.core.file_writer import atomic_save_bytes
+from saga_seeker_skill_editor.core.personality_catalog import load_personality_catalog
+from saga_seeker_skill_editor.core.personality_editor import render_personality_selections
 from saga_seeker_skill_editor.core.sheet_editor import (
     render_name_description_edit,
     render_skill_deletion,
@@ -133,4 +135,28 @@ def test_arthur_addition_and_middle_deletion_are_safe_in_memory() -> None:
     assert added_sheet.vacant_slot_count == 3
     assert deleted_sheet.entries[0].classification.kind == SkillKind.EMPTY_SLOT
     assert deleted_sheet.entries[2].skill["name"] == "Integration Original"
+    assert _sha256(source) == original_hash
+
+
+def test_real_personality_sections_match_catalog_and_copy_can_be_saved(tmp_path: Path) -> None:
+    source = _real_input_dir() / "アーサー.html"
+    if not source.exists():
+        pytest.skip("local Arthur HTML fixture is not available")
+    original_hash = _sha256(source)
+    sheet = load_character_sheet(source.read_bytes())
+    catalog = load_personality_catalog()
+    original_ids = [entry.keyword["id"] for entry in sheet.personality_entries]
+    replacement_id = next(keyword.id for keyword in catalog if keyword.id not in original_ids)
+    desired_ids = tuple(
+        [replacement_id, *original_ids[1:]]
+        + [None] * (sheet.personality_slot_count - len(original_ids))
+    )
+
+    updated = render_personality_selections(sheet, keyword_ids=desired_ids, catalog=catalog)
+    output = tmp_path / "arthur-personality-edited.html"
+    atomic_save_bytes(output, updated, validate_temp_path=lambda path: load_character_sheet(path.read_bytes()))
+    rendered = load_character_sheet(output.read_bytes())
+
+    assert rendered.personality_entries[0].keyword["id"] == replacement_id
+    assert [entry.keyword["id"] for entry in rendered.personality_entries[1:]] == original_ids[1:]
     assert _sha256(source) == original_hash

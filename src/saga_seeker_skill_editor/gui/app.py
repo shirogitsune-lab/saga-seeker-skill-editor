@@ -38,6 +38,8 @@ def run_gui(
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
     window = MainWindow(theme_manager=theme_manager)
+    if startup_theme is not None and window.personality_catalog_error:
+        return 4
     if icon_path.exists():
         window.setWindowIcon(QIcon(str(icon_path)))
     window.show()

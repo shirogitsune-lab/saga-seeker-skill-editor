@@ -6,6 +6,7 @@ from pathlib import Path
 root = Path.cwd()
 icon = root / "assets" / "kanaria.ico"
 styles = root / "src" / "saga_seeker_skill_editor" / "gui" / "styles"
+data = root / "src" / "saga_seeker_skill_editor" / "data"
 
 a = Analysis(
     ["src/saga_seeker_skill_editor/main.py"],
@@ -14,6 +15,7 @@ a = Analysis(
     datas=[
         (str(icon), "assets"),
         (str(styles), "saga_seeker_skill_editor/gui/styles"),
+        (str(data), "saga_seeker_skill_editor/data"),
     ],
     hiddenimports=[],
     hookspath=[],

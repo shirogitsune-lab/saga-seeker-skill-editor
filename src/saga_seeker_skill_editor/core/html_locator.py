@@ -95,13 +95,21 @@ def find_unique_script_json(html_bytes: bytes) -> ElementSpan:
 
 
 def find_unique_skills_ul(html_bytes: bytes) -> ElementSpan:
+    return _find_unique_ul_by_id(html_bytes, "skills-value")
+
+
+def find_unique_personality_ul(html_bytes: bytes) -> ElementSpan:
+    return _find_unique_ul_by_id(html_bytes, "personality-value")
+
+
+def _find_unique_ul_by_id(html_bytes: bytes, element_id: str) -> ElementSpan:
     candidates: list[ElementSpan] = []
     for match in _TAG_RE.finditer(html_bytes):
         is_close, tag_name, raw_attrs = match.group(1), match.group(2).lower(), match.group(3)
         if is_close or tag_name != b"ul":
             continue
         attrs = parse_attrs(raw_attrs)
-        if attrs.get("id") != "skills-value":
+        if attrs.get("id") != element_id:
             continue
         end_tag_start, end_tag_end = _find_matching_end(html_bytes, match.end(), "ul")
         candidates.append(
@@ -117,7 +125,7 @@ def find_unique_skills_ul(html_bytes: bytes) -> ElementSpan:
             )
         )
     if len(candidates) != 1:
-        raise HtmlStructureError(f"expected one skills-value ul, found {len(candidates)}")
+        raise HtmlStructureError(f"expected one {element_id} ul, found {len(candidates)}")
     return candidates[0]
 
 
@@ -140,6 +148,14 @@ def _find_matching_end(html_bytes: bytes, search_from: int, tag_name: str) -> tu
 
 
 def find_direct_skill_lis(html_bytes: bytes, ul_span: ElementSpan) -> list[LiSpan]:
+    return find_direct_lis(html_bytes, ul_span)
+
+
+def find_direct_personality_lis(html_bytes: bytes, ul_span: ElementSpan) -> list[LiSpan]:
+    return find_direct_lis(html_bytes, ul_span)
+
+
+def find_direct_lis(html_bytes: bytes, ul_span: ElementSpan) -> list[LiSpan]:
     lis: list[LiSpan] = []
     depth = 0
     pos = ul_span.content_start

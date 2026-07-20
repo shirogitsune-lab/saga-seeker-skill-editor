@@ -11,9 +11,16 @@ from saga_seeker_skill_editor.core.html_locator import (
     HtmlStructureError,
     LiSpan,
     find_direct_skill_lis,
+    find_direct_personality_lis,
     find_unique_script_json,
+    find_unique_personality_ul,
     find_unique_skills_ul,
     text_content,
+)
+from saga_seeker_skill_editor.core.personality_catalog import (
+    PersonalityCatalogError,
+    catalog_by_id,
+    load_personality_catalog,
 )
 from saga_seeker_skill_editor.core.skill_classifier import (
     SkillClassification,
@@ -36,6 +43,13 @@ class SkillEntry:
 
 
 @dataclass(frozen=True)
+class PersonalityEntry:
+    index: int
+    keyword: dict[str, Any]
+    li: LiSpan
+
+
+@dataclass(frozen=True)
 class CharacterSheet:
     raw_html: bytes
     data: dict[str, Any]
@@ -47,6 +61,12 @@ class CharacterSheet:
     vacant_slot_count: int
     read_only: bool
     read_only_reason: str = ""
+    personality_ul_span: ElementSpan | None = None
+    personality_entries: tuple[PersonalityEntry, ...] = ()
+    personality_lis: tuple[LiSpan, ...] = ()
+    personality_slot_count: int = 0
+    personality_read_only: bool = True
+    personality_read_only_reason: str = "性格キーワード欄を確認できません"
 
     @property
     def character_name(self) -> str:
@@ -76,6 +96,13 @@ def load_character_sheet(raw_html: bytes) -> CharacterSheet:
     skills = data.get("skills")
     if not isinstance(skills, list) or not all(isinstance(skill, dict) for skill in skills):
         raise CharacterSheetError("character-sheet-data.data.skills is not a list of objects")
+
+    personalities = data.get("personalities")
+    if not isinstance(personalities, list) or not all(isinstance(item, dict) for item in personalities):
+        personalities = []
+        personality_data_error = "character-sheet-data.data.personalities is not a list of objects"
+    else:
+        personality_data_error = ""
 
     lis = find_direct_skill_lis(raw_html, ul_span)
     trailing_lis = lis[len(skills) :] if len(lis) >= len(skills) else []
@@ -117,6 +144,15 @@ def load_character_sheet(raw_html: bytes) -> CharacterSheet:
         if not reason:
             reason = "JSON and HTML skill entries do not safely match by position"
 
+    (
+        personality_ul_span,
+        personality_entries,
+        personality_lis,
+        personality_slot_count,
+        personality_read_only,
+        personality_reason,
+    ) = _load_personalities(raw_html, personalities, personality_data_error)
+
     return CharacterSheet(
         raw_html=raw_html,
         data=parsed,
@@ -128,7 +164,68 @@ def load_character_sheet(raw_html: bytes) -> CharacterSheet:
         vacant_slot_count=len(trailing_lis) if counts_are_compatible else 0,
         read_only=read_only,
         read_only_reason=reason,
+        personality_ul_span=personality_ul_span,
+        personality_entries=personality_entries,
+        personality_lis=personality_lis,
+        personality_slot_count=personality_slot_count,
+        personality_read_only=personality_read_only,
+        personality_read_only_reason=personality_reason,
     )
+
+
+def _load_personalities(
+    raw_html: bytes,
+    personalities: list[dict[str, Any]],
+    data_error: str,
+) -> tuple[ElementSpan | None, tuple[PersonalityEntry, ...], tuple[LiSpan, ...], int, bool, str]:
+    if data_error:
+        return None, (), (), 0, True, data_error
+    try:
+        ul_span = find_unique_personality_ul(raw_html)
+        lis = find_direct_personality_lis(raw_html, ul_span)
+    except HtmlStructureError as exc:
+        return None, (), (), 0, True, str(exc)
+
+    if len(lis) != 6:
+        return ul_span, (), tuple(lis), len(lis), True, (
+            f"personality slot count mismatch: expected 6 direct li elements, found {len(lis)}"
+        )
+    if len(personalities) > len(lis):
+        return ul_span, (), tuple(lis), len(lis), True, (
+            f"personality count mismatch: JSON has {len(personalities)}, HTML has {len(lis)} direct li elements"
+        )
+
+    try:
+        catalog = catalog_by_id(load_personality_catalog())
+    except PersonalityCatalogError as exc:
+        return ul_span, (), tuple(lis), len(lis), True, str(exc)
+    entries: list[PersonalityEntry] = []
+    seen_ids: set[int] = set()
+    for index, keyword in enumerate(personalities):
+        keyword_id = keyword.get("id")
+        catalog_keyword = catalog.get(keyword_id) if isinstance(keyword_id, int) and not isinstance(keyword_id, bool) else None
+        if catalog_keyword is None or keyword != catalog_keyword.as_dict():
+            return ul_span, tuple(entries), tuple(lis), len(lis), True, (
+                f"personality {index + 1} does not exactly match the bundled catalog"
+            )
+        if keyword_id in seen_ids:
+            return ul_span, tuple(entries), tuple(lis), len(lis), True, (
+                f"personality {index + 1} duplicates an earlier keyword"
+            )
+        seen_ids.add(keyword_id)
+        li = lis[index]
+        if li.attrs or text_content(li.inner) != catalog_keyword.name:
+            return ul_span, tuple(entries), tuple(lis), len(lis), True, (
+                f"JSON and HTML personality entries do not safely match at position {index + 1}"
+            )
+        entries.append(PersonalityEntry(index=index, keyword=keyword, li=li))
+
+    for index, li in enumerate(lis[len(personalities) :], start=len(personalities)):
+        if li.attrs or b"<" in li.inner or text_content(li.inner) != "":
+            return ul_span, tuple(entries), tuple(lis), len(lis), True, (
+                f"personality slot {index + 1} is not a safe empty slot"
+            )
+    return ul_span, tuple(entries), tuple(lis), len(lis), False, ""
 
 
 def _position_consistent(skill: dict[str, Any], li: LiSpan) -> bool:

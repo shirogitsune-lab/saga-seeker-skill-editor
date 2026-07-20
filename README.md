@@ -1,87 +1,122 @@
-# Saga & Seeker Skill Editor
+# Saga & Seeker スキルエディター
 
-Saga & Seeker Skill Editor is a local Windows GUI application for safely editing only the skill fields in Saga & Seeker character sheet HTML files.
+Saga & SeekerのキャラクターシートHTMLに含まれるスキル名と説明文を、安全に編集するためのWindows向けGUIアプリケーションです。
 
-## User Interface
+## ダウンロードと起動
 
-The PySide6 application uses a master-detail layout. The left pane is a read-only, single-selection skill overview; the right pane edits the selected skill. Technical metadata and destructive default-skill replacement are kept in separate disclosure sections.
+1. [最新版のダウンロードページ](https://github.com/shirogitsune-lab/saga-seeker-skill-editor/releases/latest)を開きます。
+2. 通常は、ファイル名の末尾が`windows-x64-onefile.exe`になっているものをダウンロードします。
+3. ダウンロードしたEXEを起動します。インストール作業は不要です。
+4. 「HTMLファイルを開く」からキャラクターシートを選び、スキルを編集します。
+5. 編集後は「別名で保存」を使い、原本とは別のHTMLファイルとして保存します。
 
-All visual skill slots are shown in the list. Any vacant slot can be edited before saving, and several consecutive skills can be added in one operation. If an earlier slot is left blank, the editor marks the gap and blocks saving until the skills are contiguous from the front. Skill deletion is kept under Advanced Operations as one contextual action. Deleting a middle item replaces it with an explicit empty skill to preserve positional mapping, while deleting the last registered item returns that slot to a vacant state where the game may add a skill automatically.
+配布EXEはコード署名されていないため、Windows SmartScreenが警告を表示する場合があります。ダウンロードしたファイルは、Releaseに添付された`SHA256SUMS.txt`で検証できます。
 
-Main shortcuts:
+配布形式は次の2種類です。
 
-- `Ctrl+O`: open a character sheet HTML file
-- `Ctrl+Shift+S`: save edited content under a new name
-- `F5`: reload the current file
-- `F6`: move focus between the skill list and editor
-- `Ctrl+W`: close the application
+- `onefile`: 単体のEXE。通常はこちらを使用します。
+- `onedir`: EXEと実行に必要なファイルをまとめたZIP。
 
-Unsaved changes are always resolved through Save As, Discard, or Cancel before a file switch, reload, or exit.
+このアプリケーションはローカルファイルだけを処理し、ネットワーク通信を行いません。
 
-The `View > Appearance` menu provides Light, Dark, and High Contrast themes. Light is used on first launch. The selected theme is restored with `QSettings` on later launches, while temporary theme-resource failures fall back without overwriting the user's saved choice.
+## 画面と操作
 
-## Windows Builds
+PySide6によるマスター・ディテール型の画面です。左側にはスキル一覧、右側には選択中スキルの編集フォームを表示します。一覧は一つのスキルを選ぶためのもので、表のセルを直接編集することはありません。
 
-Prebuilt Windows x64 packages are published on the GitHub Releases page in two forms:
+すべてのスキル枠を一覧表示し、未使用枠には複数のスキルをまとめて入力できます。途中の枠を空けたまま後ろの枠へ入力すると整合性エラーを表示し、手前から連続する状態へ修正されるまで保存を止めます。
 
-- `onefile`: one standalone executable
-- `onedir`: a ZIP containing the executable and its runtime files
+スキルの削除やデフォルトスキルの置き換えは「高度な操作」に分離されています。リスト途中のスキルを削除する場合は、位置対応を維持するため空スキルへ置き換えます。末尾のスキルを削除する場合は、ゲームが自動追加に使用できる未使用枠へ戻します。
 
-The executables are not code-signed, so Windows SmartScreen may display a warning. Verify downloaded files against the release's `SHA256SUMS.txt` before running them. The application edits local files only and does not perform network communication.
+主なキーボードショートカット:
 
-## Core Safety Rules
+- `Ctrl+O`: キャラクターシートHTMLを開く
+- `Ctrl+Shift+S`: 編集結果を別名で保存する
+- `F5`: 現在のファイルを再読み込みする
+- `F6`: スキル一覧と編集フォームの間でフォーカスを移動する
+- `Ctrl+W`: アプリケーションを終了する
 
-- The app must not execute JavaScript from input HTML.
-- The app must not use network communication.
-- `data.skills` and `ul#skills-value > li` are matched by position, not by ID.
-- Direct child `li` elements of `ul#skills-value` are the only HTML skill elements.
-- The HTML always has visual skill slots. Plain trailing `<li>&nbsp;</li>` elements with no attributes are vacant slots and do not require matching `data.skills` objects.
-- An explicit empty-skill object is still a real `data.skills` entry used to occupy a slot and prevent automatic skill generation. It is not treated as a vacant slot.
-- Extra HTML entries containing attributes, child elements, or visible text remain a structure mismatch and force read-only mode.
-- New manual skills are appended one object at a time and occupy consecutive vacant slots from the front. Multiple consecutive additions can be saved together; gaps block saving.
-- Deleting a middle skill replaces only its JSON object and `li` with an explicit empty skill. Deleting the tail skill removes only that final JSON object and restores its `li` as a vacant slot.
-- Skill IDs have no format restriction. Only non-string IDs, empty string IDs, and exact duplicate IDs require repair when the affected skill is edited.
-- Existing empty or duplicate IDs are not repaired on load.
-- Saving must use a same-directory temporary file, flush and fsync, reread validation, then `os.replace`.
+未保存の変更がある状態でファイルの切り替え、再読み込み、終了を行う場合は、「別名で保存」「変更を破棄」「キャンセル」から処理を選択します。
 
-## Dependencies
+「表示 > 外観」から、ライト、ダーク、ハイコントラストの3テーマを選択できます。初回起動時はライトテーマを使用し、次回以降は前回選択したテーマを復元します。
 
-Runtime dependency:
+## 安全仕様
+
+- 入力HTML内のJavaScriptを実行しません。
+- ネットワーク通信を行いません。
+- `data.skills`と`ul#skills-value > li`は、IDではなく配列位置と表示順で対応付けます。
+- HTML側では`ul#skills-value`の直下にある`li`だけをスキル要素として扱います。
+- 属性を持たない末尾の`<li>&nbsp;</li>`は未使用枠として扱い、対応する`data.skills`オブジェクトを要求しません。
+- 明示的な空スキルオブジェクトは、枠を占有してゲームによる自動生成を防ぐ正式な`data.skills`要素です。未使用枠とは区別します。
+- 余分なHTML要素に属性、子要素、表示文字がある場合は構造不一致として読み取り専用にします。
+- 手動作成したスキルは、手前の未使用枠から連続するように追加します。連続する複数件を一度に保存できますが、途中に空欄がある場合は保存しません。
+- リスト途中の削除は、対象のJSONオブジェクトと`li`だけを空スキルへ置き換えます。
+- 末尾の削除は、最後のJSONオブジェクトだけを削除し、対応する`li`を未使用枠へ戻します。
+- スキルIDの形式は制限しません。非文字列、空文字列、完全一致による重複だけを、対象スキル編集時の修復対象とします。
+- 読み込み時から存在する空IDや重複IDは、自動修復しません。
+- 保存時は同じフォルダに一時ファイルを作成し、`flush`、`fsync`、再読み込み検証を経てから`os.replace`で正式ファイルへ反映します。
+- 利用者入力をJSONへ書き込む際は、`<`、`>`、`&`をUnicodeエスケープし、`</script>`によるscript要素の終了を防ぎます。
+- 許可されたJSON領域とHTMLのスキル要素以外が変化していないことを、不変セグメントの比較で検証します。
+
+## 動作環境と依存関係
+
+実行時依存:
 
 - PySide6
 
-Development and build dependencies:
+開発・テスト・ビルド用依存:
 
 - pytest
 - PyInstaller
 - Pillow
 
-Pillow is for icon conversion during build preparation. It should not be required by the distributed application at runtime unless a later phase deliberately adds runtime image conversion.
+Pillowはビルド前のアイコン変換だけに使用します。アプリケーションの実行時には使用せず、配布EXEにも不要な依存として含めません。
 
-## Build Notes
+## ソースからの実行
 
-The source WebP icon is kept at `assets/カナリア.webp`. Run `scripts/convert_icon.py` to generate `assets/kanaria.ico` before packaging.
+Python 3.11以降と`uv`を使用します。
 
-`SagaSeekerSkillEditor.spec` sets the EXE icon and packages `gui/styles/*.qss` for PyInstaller onefile builds. The build script includes the same theme resources in onedir builds. Runtime resource lookup supports PyInstaller's `_MEIPASS` extraction directory from one centralized helper.
+```powershell
+uv sync --extra dev --extra build
+uv run python -m saga_seeker_skill_editor
+```
 
-## Fixtures
+テスト:
 
-Public tests must use minimal synthetic fixtures only.
+```powershell
+uv run pytest -v
+```
 
-Real character sheet HTML files, Base64 images, personal settings, and game-derived content must stay out of Git. Put local integration fixtures under:
+Windowsビルド:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onedir
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onefile
+```
+
+## ビルドについて
+
+元のWebPアイコンは`assets/カナリア.webp`にあります。パッケージ作成前に`scripts/convert_icon.py`を実行すると、`assets/kanaria.ico`を生成します。
+
+`SagaSeekerSkillEditor.spec`はEXEアイコンを設定し、onefile版へ`gui/styles/*.qss`を同梱します。ビルドスクリプトはonedir版にも同じテーマファイルを含めます。PyInstallerのonefile実行時に使用される`_MEIPASS`を含め、リソースパスの解決は一か所へ集約しています。
+
+## テスト用HTML
+
+GitHubへ公開するテストでは、最小限の合成フィクスチャだけを使用します。
+
+実キャラクターシートHTML、Base64画像、個人設定、ゲーム由来コンテンツはGitへ追加しません。ローカル統合テスト用のHTMLは次の場所へ配置できます。
 
 ```text
 tests/private_fixtures/
 ```
 
-That directory is ignored except for `.gitkeep`.
+このディレクトリは`.gitkeep`以外がGitの追跡対象から除外されます。
 
-Alternatively, set `SAGA_SEEKER_PRIVATE_FIXTURES` to a private directory containing local character sheet HTML files before running the integration tests. The path itself is not stored in the repository.
+別の非公開フォルダを使用する場合は、統合テスト実行前に`SAGA_SEEKER_PRIVATE_FIXTURES`へそのパスを設定します。設定したパス自体がリポジトリへ保存されることはありません。
 
-## License And Assets
+## ライセンスと権利表記
 
-This project is released under the [MIT License](LICENSE). The license covers the source code and bundled canary application icon. Built executables are distributed under the same terms.
+このプロジェクトは[MIT License](LICENSE)で公開されています。ライセンスはソースコード、同梱のカナリア画像、配布EXEに適用されます。
 
-Saga & Seeker, its game content, and related names belong to their respective rights holders. This project is an unofficial interoperability tool and is not affiliated with or endorsed by the game developer or publisher. Character sheet HTML files and other game-derived content are not distributed with this repository.
+Saga & Seeker、そのゲーム内容、関連する名称の権利は、それぞれの権利者に帰属します。本プロジェクトは相互運用を目的とした非公式ツールであり、ゲームの開発元または販売元との提携や公認を示すものではありません。キャラクターシートHTMLなどのゲーム由来コンテンツは、本リポジトリで配布しません。
 
-Public tests contain only minimal synthetic fixtures created for this project. Local private fixtures remain excluded from Git.
+公開テストに含まれるデータは、このプロジェクト用に作成した最小限の合成フィクスチャだけです。ローカルのprivate fixtureはGitの追跡対象外です。

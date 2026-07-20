@@ -1,0 +1,162 @@
+/* Saga & Seeker semantic theme: high_contrast */
+QWidget {
+    color: @TEXT@;
+    font-size: 10pt;
+}
+QMainWindow, QMenuBar, QMenu {
+    background: @BACKGROUND@;
+    color: @TEXT@;
+}
+QFrame#summaryPanel, QFrame#statusBar, QFrame#editorPanel {
+    background: @PANEL@;
+    border: @BORDER_WIDTH@ solid @BORDER@;
+    border-radius: 4px;
+}
+QLabel#characterName {
+    color: @HEADING@;
+    font-size: 16pt;
+    font-weight: 600;
+}
+QLabel#mutedText, QLabel#technicalValue {
+    color: @MUTED_TEXT@;
+}
+QLabel#technicalValue {
+    font-family: "Yu Gothic UI";
+}
+QLabel[state="normal"] {
+    color: @SUCCESS@;
+    font-weight: 600;
+}
+QLabel[state="modified"] {
+    color: @WARNING@;
+    font-weight: 600;
+}
+QLabel[state="error"] {
+    color: @DANGER@;
+    font-weight: 600;
+}
+QLabel[state="unloaded"] {
+    color: @MUTED_TEXT@;
+    font-weight: 600;
+}
+QLabel[badge="true"] {
+    background: @BADGE_BACKGROUND@;
+    border: @BORDER_WIDTH@ solid @BORDER@;
+    border-radius: 3px;
+    padding: 2px 7px;
+    color: @BADGE_TEXT@;
+}
+QPushButton {
+    min-height: 30px;
+    padding: 3px 12px;
+    border: @BORDER_WIDTH@ solid @BORDER@;
+    border-radius: 4px;
+    background: @BUTTON@;
+    color: @TEXT@;
+}
+QPushButton:hover {
+    background: @BUTTON_HOVER@;
+    border-color: @FOCUS@;
+}
+QPushButton:pressed {
+    background: @BUTTON_PRESSED@;
+}
+QPushButton:disabled {
+    background: @DISABLED_BACKGROUND@;
+    color: @DISABLED@;
+    border-color: @BORDER@;
+}
+QPushButton[role="primary"] {
+    background: @ACCENT@;
+    border-color: @FOCUS@;
+    color: @ACCENT_TEXT@;
+    font-weight: 600;
+}
+QPushButton[role="primary"]:hover {
+    background: @ACCENT_HOVER@;
+}
+QPushButton[role="primary"]:pressed {
+    background: @ACCENT_PRESSED@;
+}
+QPushButton[role="danger"] {
+    background: @DANGER_BACKGROUND@;
+    border-color: @DANGER@;
+    color: @DANGER_TEXT@;
+}
+QLineEdit, QTextEdit {
+    background: @INPUT@;
+    color: @TEXT@;
+    border: @BORDER_WIDTH@ solid @BORDER@;
+    border-radius: 3px;
+    selection-background-color: @SELECTION@;
+    selection-color: @SELECTION_TEXT@;
+}
+QLineEdit {
+    min-height: 30px;
+    padding: 2px 7px;
+}
+QTextEdit {
+    padding: 6px;
+}
+QLineEdit:focus, QTextEdit:focus, QTreeWidget:focus {
+    border: @FOCUS_WIDTH@ solid @FOCUS@;
+}
+QLineEdit:disabled, QTextEdit:disabled {
+    background: @DISABLED_BACKGROUND@;
+    color: @DISABLED@;
+    border-color: @BORDER@;
+}
+QTreeWidget {
+    background: @INPUT@;
+    color: @TEXT@;
+    alternate-background-color: @ALTERNATE@;
+    border: @BORDER_WIDTH@ solid @BORDER@;
+    selection-background-color: @SELECTION@;
+    selection-color: @SELECTION_TEXT@;
+}
+QTreeWidget::item {
+    min-height: 30px;
+    padding: 2px;
+}
+QTreeWidget::item:selected {
+    background: @SELECTION@;
+    color: @SELECTION_TEXT@;
+    border: @SELECTION_BORDER_WIDTH@ solid @FOCUS@;
+}
+QHeaderView::section {
+    background: @BUTTON@;
+    color: @TEXT@;
+    padding: 6px;
+    border: 0;
+    border-right: @BORDER_WIDTH@ solid @BORDER@;
+    border-bottom: @BORDER_WIDTH@ solid @BORDER@;
+}
+QToolButton#sectionToggle {
+    border: 0;
+    padding: 6px 2px;
+    color: @TEXT@;
+    font-weight: 600;
+    text-align: left;
+}
+QToolButton#sectionToggle:hover {
+    color: @ACCENT@;
+}
+QToolButton#sectionToggle:focus {
+    border: @FOCUS_WIDTH@ solid @FOCUS@;
+}
+QSplitter::handle {
+    background: @SPLITTER@;
+    width: 2px;
+}
+QMenuBar::item:selected, QMenu::item:selected {
+    background: @SELECTION@;
+    color: @SELECTION_TEXT@;
+}
+QMenu::separator {
+    background: @BORDER@;
+    height: @BORDER_WIDTH@;
+    margin: 4px 8px;
+}
+QRadioButton:disabled, QCheckBox:disabled {
+    color: @DISABLED@;
+}

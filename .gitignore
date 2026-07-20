@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+.test-tmp/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# Build outputs
+build/
+dist/
+*.spec~
+work/
+
+# Local/private Saga & Seeker sheets
+*.html
+tests/private_fixtures/*
+!tests/private_fixtures/.gitkeep
+
+# Generated icons and local release archives
+assets/kanaria.ico
+*.exe
+*.tmp
+*.temp
+*.bak
+*.zip

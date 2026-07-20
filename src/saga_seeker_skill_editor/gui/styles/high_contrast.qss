@@ -12,6 +12,13 @@ QFrame#summaryPanel, QFrame#statusBar, QFrame#editorPanel, QFrame#pickerPanel {
     border: @BORDER_WIDTH@ solid @BORDER@;
     border-radius: 4px;
 }
+QFrame#editorPanel[dragActive="true"] {
+    border: @FOCUS_WIDTH@ solid @FOCUS@;
+}
+QLabel#dropHint {
+    color: @SUCCESS@;
+    font-weight: 600;
+}
 QLabel#characterName {
     color: @HEADING@;
     font-size: 16pt;

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QAbstractItemView, QApplication  # noqa: E402
 from saga_seeker_skill_editor.core.character_sheet import load_character_sheet  # noqa: E402
 from saga_seeker_skill_editor.core.personality_catalog import load_personality_catalog  # noqa: E402
 from saga_seeker_skill_editor.gui.main_window import MainState, MainWindow  # noqa: E402
+from saga_seeker_skill_editor.gui import personality_editor_widget  # noqa: E402
 from saga_seeker_skill_editor.gui.personality_editor_widget import _create_drag_mime  # noqa: E402
 
 
@@ -328,6 +329,55 @@ def test_drop_event_routes_catalog_payload_to_target_slot(tmp_path: Path) -> Non
     assert event.accepted
     assert editor.selected_ids() == (1, 31, 2, None, None, None)
     window.hide()
+
+
+def test_drag_uses_neutral_ignore_cursor_and_highlights_valid_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window = _window(tmp_path, [])
+    editor = window.personality_editor
+    _select_result(window, 1)
+    recorded: dict[str, object] = {}
+
+    class FakeDrag:
+        def __init__(self, _source) -> None:
+            pass
+
+        def setMimeData(self, mime) -> None:  # noqa: N802
+            recorded["mime"] = mime
+
+        def setDragCursor(self, _pixmap, action) -> None:  # noqa: N802
+            recorded["cursor_action"] = action
+
+        def exec(self, action):
+            recorded["exec_action"] = action
+            assert editor.slot_panel.property("dragActive") is True
+            assert not editor.drop_hint_label.isHidden()
+            return Qt.DropAction.IgnoreAction
+
+    monkeypatch.setattr(personality_editor_widget, "QDrag", FakeDrag)
+
+    editor.result_tree.startDrag(Qt.DropAction.CopyAction)
+
+    assert recorded["cursor_action"] == Qt.DropAction.IgnoreAction
+    assert recorded["exec_action"] == Qt.DropAction.CopyAction
+    assert editor.slot_panel.property("dragActive") is False
+    assert not editor.drop_hint_label.isVisible()
+
+
+def test_wrong_drop_location_shows_specific_error_message(tmp_path: Path) -> None:
+    window = _window(tmp_path, [1])
+    editor = window.personality_editor
+    event = _DropEventStub(QPointF(), 31)
+
+    editor.dropEvent(event)  # type: ignore[arg-type]
+
+    assert event.accepted
+    assert editor.selected_ids() == (1, None, None, None, None, None)
+    assert editor.operation_label.property("state") == "error"
+    assert "設定済みのキーワード" in editor.operation_label.text()
+    assert "ドロップしてください" in editor.operation_label.text()
 
 
 def test_drop_on_later_blank_appends_to_first_available_position(tmp_path: Path) -> None:

@@ -56,6 +56,10 @@ def _read_drag_mime(mime: QMimeData) -> tuple[str, int] | None:
 
 
 class PersonalityResultTree(QTreeWidget):
+    dragStarted = Signal()
+    dragFinished = Signal()
+    invalidDropRequested = Signal()
+
     def startDrag(self, _supported_actions: Qt.DropAction) -> None:  # noqa: N802
         item = self.currentItem()
         if item is None:
@@ -65,11 +69,41 @@ class PersonalityResultTree(QTreeWidget):
             return
         drag = QDrag(self)
         drag.setMimeData(_create_drag_mime("catalog", int(keyword_id)))
-        drag.exec(Qt.DropAction.CopyAction)
+        drag.setDragCursor(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowForward).pixmap(24, 24),
+            Qt.DropAction.IgnoreAction,
+        )
+        self.dragStarted.emit()
+        try:
+            drag.exec(Qt.DropAction.CopyAction)
+        finally:
+            self.dragFinished.emit()
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+        if _read_drag_mime(event.mimeData()) is not None:
+            event.acceptProposedAction()
+            return
+        super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:  # noqa: N802
+        if _read_drag_mime(event.mimeData()) is not None:
+            event.acceptProposedAction()
+            return
+        super().dragMoveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        if _read_drag_mime(event.mimeData()) is not None:
+            self.invalidDropRequested.emit()
+            event.acceptProposedAction()
+            return
+        super().dropEvent(event)
 
 
 class PersonalitySlotTree(QTreeWidget):
     dropRequested = Signal(str, int, int)
+    dragStarted = Signal()
+    dragFinished = Signal()
+    invalidDropRequested = Signal()
 
     def startDrag(self, _supported_actions: Qt.DropAction) -> None:  # noqa: N802
         item = self.currentItem()
@@ -81,7 +115,15 @@ class PersonalitySlotTree(QTreeWidget):
             return
         drag = QDrag(self)
         drag.setMimeData(_create_drag_mime("slot", int(slot)))
-        drag.exec(Qt.DropAction.MoveAction)
+        drag.setDragCursor(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowForward).pixmap(24, 24),
+            Qt.DropAction.IgnoreAction,
+        )
+        self.dragStarted.emit()
+        try:
+            drag.exec(Qt.DropAction.MoveAction)
+        finally:
+            self.dragFinished.emit()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
         if _read_drag_mime(event.mimeData()) is not None:
@@ -99,7 +141,11 @@ class PersonalitySlotTree(QTreeWidget):
         payload = _read_drag_mime(event.mimeData())
         item = self.itemAt(event.position().toPoint())
         if payload is None or item is None:
-            event.ignore()
+            if payload is not None:
+                self.invalidDropRequested.emit()
+                event.acceptProposedAction()
+            else:
+                event.ignore()
             return
         target_slot = item.data(0, Qt.ItemDataRole.UserRole)
         if target_slot is None:
@@ -147,11 +193,16 @@ class PersonalityEditorWidget(QWidget):
         self.operation_label.setObjectName("operationFeedback")
         self.operation_label.setWordWrap(True)
         self.operation_label.hide()
+        self.drop_hint_label = QLabel("設定枠へドロップ")
+        self.drop_hint_label.setObjectName("dropHint")
+        self.drop_hint_label.setProperty("state", "normal")
+        self.drop_hint_label.hide()
 
         self.slot_tree = self._create_slot_tree()
-        slot_panel = QFrame()
-        slot_panel.setObjectName("editorPanel")
-        slot_layout = QVBoxLayout(slot_panel)
+        self.slot_panel = QFrame()
+        self.slot_panel.setObjectName("editorPanel")
+        self.slot_panel.setProperty("dragActive", False)
+        slot_layout = QVBoxLayout(self.slot_panel)
         slot_layout.setContentsMargins(12, 10, 12, 12)
         slot_layout.setSpacing(7)
         slot_heading = QLabel("設定済みのキーワード")
@@ -167,6 +218,7 @@ class PersonalityEditorWidget(QWidget):
         slot_heading_layout = QHBoxLayout()
         slot_heading_layout.setContentsMargins(0, 0, 0, 0)
         slot_heading_layout.addWidget(slot_heading, 1)
+        slot_heading_layout.addWidget(self.drop_hint_label)
         slot_heading_layout.addWidget(self.move_up_button)
         slot_heading_layout.addWidget(self.move_down_button)
         slot_layout.addLayout(slot_heading_layout)
@@ -273,7 +325,7 @@ class PersonalityEditorWidget(QWidget):
         picker_layout.addLayout(action_layout)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(slot_panel)
+        splitter.addWidget(self.slot_panel)
         splitter.addWidget(picker_panel)
         splitter.setChildrenCollapsible(False)
         splitter.setStretchFactor(0, 0)
@@ -288,6 +340,8 @@ class PersonalityEditorWidget(QWidget):
         layout.addWidget(self.error_label)
         layout.addWidget(self.operation_label)
         layout.addWidget(splitter, 1)
+
+        self.setAcceptDrops(True)
 
         self._populate_empty_slots()
         self.slot_tree.setCurrentItem(self.slot_tree.topLevelItem(0))
@@ -352,6 +406,25 @@ class PersonalityEditorWidget(QWidget):
         self.slot_tree.setFocus()
         self.slot_tree.setCurrentItem(self.slot_tree.topLevelItem(0))
 
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+        if _read_drag_mime(event.mimeData()) is not None:
+            event.acceptProposedAction()
+            return
+        super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:  # noqa: N802
+        if _read_drag_mime(event.mimeData()) is not None:
+            event.acceptProposedAction()
+            return
+        super().dragMoveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        if _read_drag_mime(event.mimeData()) is not None:
+            self._invalid_drop()
+            event.acceptProposedAction()
+            return
+        super().dropEvent(event)
+
     def visible_result_ids(self) -> tuple[int, ...]:
         ids: list[int] = []
         for group_index in range(self.result_tree.topLevelItemCount()):
@@ -396,6 +469,9 @@ class PersonalityEditorWidget(QWidget):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
         tree.currentItemChanged.connect(self._slot_selected)
         tree.dropRequested.connect(self._handle_drop)
+        tree.dragStarted.connect(lambda: self._set_drag_active(True))
+        tree.dragFinished.connect(lambda: self._set_drag_active(False))
+        tree.invalidDropRequested.connect(self._invalid_drop)
         return tree
 
     def _create_result_tree(self) -> PersonalityResultTree:
@@ -411,12 +487,16 @@ class PersonalityEditorWidget(QWidget):
         tree.setAccessibleDescription("候補を設定済みキーワード一覧へドラッグして追加できます")
         tree.setDragEnabled(True)
         tree.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        tree.viewport().setAcceptDrops(True)
         tree.setDefaultDropAction(Qt.DropAction.CopyAction)
         header = tree.header()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for column in range(1, 5):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+        tree.dragStarted.connect(lambda: self._set_drag_active(True))
+        tree.dragFinished.connect(lambda: self._set_drag_active(False))
+        tree.invalidDropRequested.connect(self._invalid_drop)
         return tree
 
     def _populate_empty_slots(self) -> None:
@@ -582,6 +662,19 @@ class PersonalityEditorWidget(QWidget):
         else:
             return
         self._insert_keyword(keyword_id, target_slot)
+
+    def _set_drag_active(self, active: bool) -> None:
+        self.slot_panel.setProperty("dragActive", active)
+        self.drop_hint_label.setVisible(active)
+        self.slot_panel.style().unpolish(self.slot_panel)
+        self.slot_panel.style().polish(self.slot_panel)
+        self.slot_panel.update()
+
+    def _invalid_drop(self) -> None:
+        self._set_operation_feedback(
+            "ここには設定できません。左側の「設定済みのキーワード」の枠へドロップしてください。",
+            error=True,
+        )
 
     def _insert_keyword(self, keyword_id: int, target_slot: int) -> bool:
         ordered = self._ordered_keyword_ids()

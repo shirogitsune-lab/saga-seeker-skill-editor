@@ -9,12 +9,13 @@ import pytest
 pytest.importorskip("PySide6")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtCore import QPointF, Qt  # noqa: E402
+from PySide6.QtWidgets import QAbstractItemView, QApplication  # noqa: E402
 
 from saga_seeker_skill_editor.core.character_sheet import load_character_sheet  # noqa: E402
 from saga_seeker_skill_editor.core.personality_catalog import load_personality_catalog  # noqa: E402
 from saga_seeker_skill_editor.gui.main_window import MainState, MainWindow  # noqa: E402
+from saga_seeker_skill_editor.gui.personality_editor_widget import _create_drag_mime  # noqa: E402
 
 
 def _app() -> QApplication:
@@ -95,6 +96,12 @@ def test_personality_tab_has_six_slots_and_browsable_catalog(tmp_path: Path) -> 
     assert editor.category_buttons["力"].sizePolicy().verticalPolicy().name == "Fixed"
     assert editor.category_buttons["力"].font().pointSizeF() >= 10
     assert editor.visible_result_ids() == tuple(range(1, 31))
+    assert editor.slot_tree.dragDropMode() == QAbstractItemView.DragDropMode.DragDrop
+    assert editor.result_tree.dragDropMode() == QAbstractItemView.DragDropMode.DragOnly
+    assert editor.move_up_button.text() == "上へ移動"
+    assert editor.move_down_button.text() == "下へ移動"
+    assert not editor.move_up_button.icon().isNull()
+    assert not editor.move_down_button.icon().isNull()
     assert [editor.result_tree.topLevelItem(index).text(0) for index in range(3)] == [
         "美徳 (12件)",
         "中庸 (9件)",
@@ -240,3 +247,126 @@ def test_personality_change_participates_in_unsaved_state(tmp_path: Path) -> Non
     assert window._change_count() == 1
     window.reset_edits()
     assert not window.unsaved_changes
+
+
+def test_middle_deletion_compacts_following_keywords_without_gap_error(tmp_path: Path) -> None:
+    window = _window(tmp_path, [1, 2, 31, 32, 33])
+    editor = window.personality_editor
+    _select_slot(window, 2)
+
+    editor.clear_button.click()
+
+    assert editor.selected_ids() == (1, 2, 32, 33, None, None)
+    assert editor.slot_tree.currentItem() is editor.slot_tree.topLevelItem(2)
+    assert "前へ詰めました" in editor.operation_label.text()
+    assert window.validation_error is None
+    assert window.main_state == MainState.DIRTY
+
+
+def test_move_buttons_reorder_and_reverting_restores_clean_state(tmp_path: Path) -> None:
+    window = _window(tmp_path, [1, 2, 31])
+    editor = window.personality_editor
+    _select_slot(window, 1)
+
+    editor.move_down_button.click()
+    assert editor.selected_ids() == (1, 31, 2, None, None, None)
+    assert editor._active_slot() == 2
+    assert window.main_state == MainState.DIRTY
+
+    editor.move_up_button.click()
+    assert editor.selected_ids() == (1, 2, 31, None, None, None)
+    assert editor._active_slot() == 1
+    assert window.main_state == MainState.NORMAL
+
+
+def test_catalog_drop_inserts_and_assigned_drop_moves_without_duplicates(tmp_path: Path) -> None:
+    window = _window(tmp_path, [1, 2, 3])
+    editor = window.personality_editor
+
+    editor.slot_tree.dropRequested.emit("catalog", 31, 1)
+    assert editor.selected_ids() == (1, 31, 2, 3, None, None)
+    assert "追加しました" in editor.operation_label.text()
+
+    editor.slot_tree.dropRequested.emit("catalog", 2, 3)
+    assert editor.selected_ids() == (1, 31, 3, 2, None, None)
+    assert editor.selected_ids().count(2) == 1
+    assert "移動しました" in editor.operation_label.text()
+    assert window.validation_error is None
+
+
+class _DropEventStub:
+    def __init__(self, position: QPointF, keyword_id: int) -> None:
+        self._position = position
+        self._mime = _create_drag_mime("catalog", keyword_id)
+        self.accepted = False
+
+    def position(self) -> QPointF:
+        return self._position
+
+    def mimeData(self):  # noqa: N802
+        return self._mime
+
+    def acceptProposedAction(self) -> None:  # noqa: N802
+        self.accepted = True
+
+    def ignore(self) -> None:
+        self.accepted = False
+
+
+def test_drop_event_routes_catalog_payload_to_target_slot(tmp_path: Path) -> None:
+    window = _window(tmp_path, [1, 2])
+    editor = window.personality_editor
+    window.edit_tabs.setCurrentIndex(1)
+    window.show()
+    _app().processEvents()
+    target = editor.slot_tree.topLevelItem(1)
+    position = QPointF(editor.slot_tree.visualItemRect(target).center())
+    event = _DropEventStub(position, 31)
+
+    editor.slot_tree.dropEvent(event)  # type: ignore[arg-type]
+
+    assert event.accepted
+    assert editor.selected_ids() == (1, 31, 2, None, None, None)
+    window.hide()
+
+
+def test_drop_on_later_blank_appends_to_first_available_position(tmp_path: Path) -> None:
+    window = _window(tmp_path, [1, 2])
+    editor = window.personality_editor
+
+    editor.slot_tree.dropRequested.emit("catalog", 31, 5)
+
+    assert editor.selected_ids() == (1, 2, 31, None, None, None)
+    assert editor._active_slot() == 2
+    assert window.validation_error is None
+
+
+def test_new_catalog_drop_is_rejected_when_all_six_slots_are_filled(tmp_path: Path) -> None:
+    window = _window(tmp_path, [1, 2, 3, 4, 5, 6])
+    editor = window.personality_editor
+    before = editor.selected_ids()
+
+    editor.slot_tree.dropRequested.emit("catalog", 31, 2)
+
+    assert editor.selected_ids() == before
+    assert "6枠すべてが設定済み" in editor.operation_label.text()
+    assert editor.operation_label.property("state") == "error"
+    assert window.main_state == MainState.NORMAL
+
+
+def test_reordered_personalities_save_in_visible_slot_order(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window = _window(tmp_path, [1, 2, 31])
+    editor = window.personality_editor
+    editor.slot_tree.dropRequested.emit("slot", 2, 0)
+    destination = tmp_path / "reordered.html"
+    monkeypatch.setattr(window, "_choose_save_path", lambda: destination)
+
+    assert window.save_as()
+    saved = load_character_sheet(destination.read_bytes())
+
+    assert [entry.keyword["id"] for entry in saved.personality_entries] == [31, 1, 2]
+    assert editor.selected_ids() == (31, 1, 2, None, None, None)
+    assert window.main_state == MainState.NORMAL

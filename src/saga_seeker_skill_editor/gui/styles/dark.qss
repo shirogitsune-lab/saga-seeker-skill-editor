@@ -7,7 +7,7 @@ QMainWindow, QMenuBar, QMenu {
     background: @BACKGROUND@;
     color: @TEXT@;
 }
-QFrame#summaryPanel, QFrame#statusBar, QFrame#editorPanel {
+QFrame#summaryPanel, QFrame#statusBar, QFrame#editorPanel, QFrame#pickerPanel {
     background: @PANEL@;
     border: @BORDER_WIDTH@ solid @BORDER@;
     border-radius: 4px;
@@ -15,6 +15,11 @@ QFrame#summaryPanel, QFrame#statusBar, QFrame#editorPanel {
 QLabel#characterName {
     color: @HEADING@;
     font-size: 16pt;
+    font-weight: 600;
+}
+QLabel#sectionHeading {
+    color: @HEADING@;
+    font-size: 11pt;
     font-weight: 600;
 }
 QLabel#mutedText, QLabel#technicalValue {
@@ -83,6 +88,18 @@ QPushButton[role="danger"] {
     border-color: @DANGER@;
     color: @DANGER_TEXT@;
 }
+QPushButton[category="true"] {
+    min-height: 36px;
+    min-width: 76px;
+    padding: 6px 8px;
+    text-align: center;
+}
+QPushButton[category="true"]:checked {
+    background: @SELECTION@;
+    border: @FOCUS_WIDTH@ solid @FOCUS@;
+    color: @SELECTION_TEXT@;
+    font-weight: 600;
+}
 QLineEdit, QTextEdit, QComboBox {
     background: @INPUT@;
     color: @TEXT@;
@@ -94,6 +111,9 @@ QLineEdit, QTextEdit, QComboBox {
 QLineEdit {
     min-height: 30px;
     padding: 2px 7px;
+}
+QLineEdit {
+    placeholder-text-color: @MUTED_TEXT@;
 }
 QComboBox {
     min-height: 30px;

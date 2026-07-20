@@ -152,7 +152,18 @@ class MainWindow(QMainWindow):
         self.focus_action.setShortcut(QKeySequence("F6"))
         self.focus_action.triggered.connect(self._toggle_pane_focus)
 
-        for action in (self.open_action, self.save_action, self.reload_action, self.close_action, self.focus_action):
+        self.find_personality_action = QAction("性格キーワードを検索", self)
+        self.find_personality_action.setShortcut(QKeySequence.StandardKey.Find)
+        self.find_personality_action.triggered.connect(self._focus_personality_search)
+
+        for action in (
+            self.open_action,
+            self.save_action,
+            self.reload_action,
+            self.close_action,
+            self.focus_action,
+            self.find_personality_action,
+        ):
             self.addAction(action)
 
     def _create_summary(self) -> None:
@@ -343,6 +354,7 @@ class MainWindow(QMainWindow):
         self.appearance_action_group.triggered.connect(self._apply_selected_theme)
         self._sync_theme_actions()
         view_menu.addSeparator()
+        view_menu.addAction(self.find_personality_action)
         view_menu.addAction(self.focus_action)
 
     def _apply_selected_theme(self, action: QAction) -> None:
@@ -701,6 +713,12 @@ class MainWindow(QMainWindow):
                 self.skill_widgets[index].name_edit.setFocus()
         else:
             self.skill_list.setFocus()
+
+    def _focus_personality_search(self) -> None:
+        if self.sheet is None:
+            return
+        self.edit_tabs.setCurrentIndex(1)
+        self.personality_editor.search_edit.setFocus()
 
     def _record_error(self, *, title: str, cause: str, impact: str, remedy: str, details: str) -> None:
         self.active_error = UiError(title=title, cause=cause, impact=impact, remedy=remedy, details=details)

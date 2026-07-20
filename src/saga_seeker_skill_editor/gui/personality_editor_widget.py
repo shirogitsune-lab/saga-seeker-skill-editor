@@ -1,14 +1,23 @@
-"""Fixed-catalog personality keyword editor."""
+"""Browsable, searchable personality keyword editor."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
-    QComboBox,
+    QAbstractItemView,
+    QButtonGroup,
     QFrame,
-    QGridLayout,
+    QHeaderView,
+    QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QPushButton,
     QSizePolicy,
+    QSplitter,
+    QStyle,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -20,87 +29,152 @@ from saga_seeker_skill_editor.core.personality_catalog import PersonalityKeyword
 class PersonalityEditorWidget(QWidget):
     changed = Signal()
     SLOT_COUNT = 6
+    CATEGORY_ORDER = ("力", "知恵", "富", "愛", "法")
+    KARMA_ORDER = ("美徳", "中庸", "悪徳")
+
+    SLOT_COLUMN = 0
+    SLOT_NAME_COLUMN = 1
+    SLOT_TYPE_COLUMN = 2
+    SLOT_KARMA_COLUMN = 3
+    SLOT_ID_COLUMN = 4
+    SLOT_CHANGE_COLUMN = 5
 
     def __init__(self, catalog: tuple[PersonalityKeyword, ...], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.catalog = catalog
         self.catalog_by_id = {keyword.id: keyword for keyword in catalog}
         self.baseline_ids: tuple[int | None, ...] = (None,) * self.SLOT_COUNT
-        self.combos: list[QComboBox] = []
-        self.type_labels: list[QLabel] = []
-        self.karma_labels: list[QLabel] = []
-        self.id_labels: list[QLabel] = []
-        self.change_labels: list[QLabel] = []
+        self._selected_ids: list[int | None] = [None] * self.SLOT_COUNT
+        self._editable = True
+        self._category = self.CATEGORY_ORDER[0]
 
         heading = QLabel("性格キーワード")
         heading.setObjectName("characterName")
-        self.summary_label = QLabel("ゲーム内キーワードから最大6件を選択できます")
+        self.summary_label = QLabel("")
         self.summary_label.setObjectName("mutedText")
         self.error_label = QLabel("")
         self.error_label.setProperty("state", "error")
         self.error_label.setWordWrap(True)
         self.error_label.hide()
 
-        panel = QFrame()
-        panel.setObjectName("editorPanel")
-        grid = QGridLayout(panel)
-        grid.setContentsMargins(14, 12, 14, 14)
-        grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(8)
-        headers = ("枠", "性格キーワード", "系統", "カルマ", "ID", "変更")
-        for column, text in enumerate(headers):
-            label = QLabel(text)
-            label.setObjectName("mutedText")
-            grid.addWidget(label, 0, column)
+        self.slot_tree = self._create_slot_tree()
+        slot_panel = QFrame()
+        slot_panel.setObjectName("editorPanel")
+        slot_layout = QVBoxLayout(slot_panel)
+        slot_layout.setContentsMargins(12, 10, 12, 12)
+        slot_layout.setSpacing(7)
+        slot_heading = QLabel("設定済みのキーワード")
+        slot_heading.setObjectName("sectionHeading")
+        slot_layout.addWidget(slot_heading)
+        slot_layout.addWidget(self.slot_tree, 1)
 
-        for slot in range(self.SLOT_COUNT):
-            slot_label = QLabel(str(slot + 1))
-            combo = QComboBox()
-            combo.setAccessibleName(f"性格キーワード {slot + 1}")
-            combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            combo.setMaxVisibleItems(20)
-            combo.addItem("（未設定）", None)
-            for keyword in catalog:
-                combo.addItem(f"{keyword.name}  [{keyword.type} / {keyword.karma}]", keyword.id)
-            type_label = QLabel("-")
-            karma_label = QLabel("-")
-            id_label = QLabel("-")
-            id_label.setObjectName("technicalValue")
-            change_label = QLabel("変更なし")
+        self.search_edit = QLineEdit()
+        self.search_edit.setAccessibleName("性格キーワードを検索")
+        self.search_edit.setPlaceholderText("キーワード名を部分一致で検索")
+        self.search_edit.setClearButtonEnabled(True)
+        self.search_edit.textChanged.connect(self._rebuild_results)
+        self.search_edit.returnPressed.connect(self._apply_result)
+        search_label = QLabel("検索")
+        search_label.setBuddy(self.search_edit)
+        search_layout = QHBoxLayout()
+        search_layout.setContentsMargins(0, 0, 0, 0)
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_edit, 1)
+        self.category_group = QButtonGroup(self)
+        self.category_group.setExclusive(True)
+        self.category_buttons: dict[str, QPushButton] = {}
+        category_layout = QVBoxLayout()
+        category_layout.setContentsMargins(0, 0, 0, 0)
+        category_layout.setSpacing(6)
+        for button_id, category in enumerate(self.CATEGORY_ORDER):
+            button = QPushButton(category)
+            button.setCheckable(True)
+            button.setProperty("category", True)
+            button.setAccessibleName(f"{category}カテゴリ")
+            button.setMinimumWidth(82)
+            button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+            self.category_group.addButton(button, button_id)
+            self.category_buttons[category] = button
+            category_layout.addWidget(button)
+        self.category_buttons[self._category].setChecked(True)
+        self.category_group.idClicked.connect(self._category_clicked)
 
-            grid.addWidget(slot_label, slot + 1, 0)
-            grid.addWidget(combo, slot + 1, 1)
-            grid.addWidget(type_label, slot + 1, 2)
-            grid.addWidget(karma_label, slot + 1, 3)
-            grid.addWidget(id_label, slot + 1, 4)
-            grid.addWidget(change_label, slot + 1, 5)
-            self.combos.append(combo)
-            self.type_labels.append(type_label)
-            self.karma_labels.append(karma_label)
-            self.id_labels.append(id_label)
-            self.change_labels.append(change_label)
-            combo.currentIndexChanged.connect(lambda _value, index=slot: self._selection_changed(index))
+        self.result_tree = self._create_result_tree()
+        self.result_tree.currentItemChanged.connect(self._result_selected)
+        self.result_tree.itemDoubleClicked.connect(self._result_activated)
 
-        grid.setColumnStretch(1, 1)
+        category_widget = QWidget()
+        category_widget.setLayout(category_layout)
+        browser_layout = QHBoxLayout()
+        browser_layout.setContentsMargins(0, 0, 0, 0)
+        browser_layout.setSpacing(8)
+        browser_layout.addWidget(category_widget)
+        browser_layout.addWidget(self.result_tree, 1)
+
+        self.picker_heading = QLabel("枠 1 に設定")
+        self.picker_heading.setObjectName("sectionHeading")
+        self.scope_label = QLabel("")
+        self.scope_label.setObjectName("mutedText")
+        self.selection_detail_label = QLabel("候補を選択してください")
+        self.selection_detail_label.setObjectName("mutedText")
+        self.selection_detail_label.setWordWrap(True)
+        self.apply_button = QPushButton("この枠に設定")
+        self.apply_button.setProperty("role", "primary")
+        self.apply_button.clicked.connect(self._apply_result)
+        self.clear_button = QPushButton("未設定にする")
+        self.clear_button.clicked.connect(self._clear_active_slot)
+
+        action_layout = QHBoxLayout()
+        action_layout.addWidget(self.selection_detail_label, 1)
+        action_layout.addWidget(self.clear_button)
+        action_layout.addWidget(self.apply_button)
+
+        picker_panel = QFrame()
+        picker_panel.setObjectName("pickerPanel")
+        picker_layout = QVBoxLayout(picker_panel)
+        picker_layout.setContentsMargins(12, 10, 12, 12)
+        picker_layout.setSpacing(7)
+        picker_layout.addWidget(self.picker_heading)
+        picker_layout.addLayout(search_layout)
+        picker_layout.addWidget(self.scope_label)
+        picker_layout.addLayout(browser_layout, 1)
+        picker_layout.addLayout(action_layout)
+
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.addWidget(slot_panel)
+        splitter.addWidget(picker_panel)
+        splitter.setChildrenCollapsible(False)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([390, 650])
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
         layout.addWidget(heading)
         layout.addWidget(self.summary_label)
         layout.addWidget(self.error_label)
-        layout.addWidget(panel)
-        layout.addStretch(1)
+        layout.addWidget(splitter, 1)
+
+        self._populate_empty_slots()
+        self.slot_tree.setCurrentItem(self.slot_tree.topLevelItem(0))
+        self._rebuild_results()
+        self._sync_summary()
 
     def set_sheet(self, sheet: CharacterSheet) -> None:
         ids = [int(entry.keyword["id"]) for entry in sheet.personality_entries]
         ids.extend([None] * (self.SLOT_COUNT - len(ids)))
         self.baseline_ids = tuple(ids[: self.SLOT_COUNT])
-        for slot, (combo, keyword_id) in enumerate(zip(self.combos, self.baseline_ids, strict=True)):
-            combo.blockSignals(True)
-            combo.setCurrentIndex(combo.findData(keyword_id))
-            combo.blockSignals(False)
-            combo.setEnabled(not sheet.read_only and not sheet.personality_read_only)
-            self._sync_row(slot)
+        self._selected_ids = list(self.baseline_ids)
+        self._editable = not sheet.read_only and not sheet.personality_read_only
+        self.search_edit.setEnabled(self._editable)
+        self.result_tree.setEnabled(self._editable)
+        for button in self.category_buttons.values():
+            button.setEnabled(self._editable)
+        self.apply_button.setEnabled(False)
+        self.clear_button.setEnabled(self._editable)
+        self._sync_all_slot_rows()
+        self._sync_active_slot()
 
         if sheet.personality_read_only:
             self.set_validation_error(f"性格キーワードは読み取り専用です: {sheet.personality_read_only_reason}")
@@ -108,10 +182,11 @@ class PersonalityEditorWidget(QWidget):
             self.set_validation_error(f"シートは読み取り専用です: {sheet.read_only_reason}")
         else:
             self.set_validation_error(None)
+        self._rebuild_results()
         self._sync_summary()
 
     def selected_ids(self) -> tuple[int | None, ...]:
-        return tuple(combo.currentData() for combo in self.combos)
+        return tuple(self._selected_ids)
 
     def changed_indices(self) -> set[int]:
         return {
@@ -123,12 +198,12 @@ class PersonalityEditorWidget(QWidget):
         }
 
     def reset(self) -> None:
-        for slot, (combo, keyword_id) in enumerate(zip(self.combos, self.baseline_ids, strict=True)):
-            combo.blockSignals(True)
-            combo.setCurrentIndex(combo.findData(keyword_id))
-            combo.blockSignals(False)
-            self._sync_row(slot)
+        self._selected_ids = list(self.baseline_ids)
+        self.search_edit.clear()
+        self._sync_all_slot_rows()
+        self._sync_active_slot()
         self.set_validation_error(None)
+        self._rebuild_results()
         self._sync_summary()
         self.changed.emit()
 
@@ -137,23 +212,253 @@ class PersonalityEditorWidget(QWidget):
         self.error_label.setVisible(bool(message))
 
     def focus_first_slot(self) -> None:
-        self.combos[0].setFocus()
+        self.slot_tree.setFocus()
+        self.slot_tree.setCurrentItem(self.slot_tree.topLevelItem(0))
 
-    def _selection_changed(self, slot: int) -> None:
-        self._sync_row(slot)
+    def visible_result_ids(self) -> tuple[int, ...]:
+        ids: list[int] = []
+        for group_index in range(self.result_tree.topLevelItemCount()):
+            group = self.result_tree.topLevelItem(group_index)
+            for child_index in range(group.childCount()):
+                keyword_id = group.child(child_index).data(0, Qt.ItemDataRole.UserRole)
+                if keyword_id is not None:
+                    ids.append(int(keyword_id))
+        return tuple(ids)
+
+    def _create_slot_tree(self) -> QTreeWidget:
+        tree = QTreeWidget()
+        tree.setObjectName("personalitySlots")
+        tree.setHeaderLabels(["枠", "性格キーワード", "系統", "カルマ", "ID", "変更"])
+        tree.setRootIsDecorated(False)
+        tree.setAlternatingRowColors(True)
+        tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        tree.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        tree.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        tree.setAccessibleName("設定済み性格キーワード一覧")
+        header = tree.header()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(self.SLOT_COLUMN, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(self.SLOT_COLUMN, 34)
+        header.setSectionResizeMode(self.SLOT_NAME_COLUMN, QHeaderView.ResizeMode.Stretch)
+        for column in (
+            self.SLOT_TYPE_COLUMN,
+            self.SLOT_KARMA_COLUMN,
+            self.SLOT_ID_COLUMN,
+            self.SLOT_CHANGE_COLUMN,
+        ):
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+        tree.currentItemChanged.connect(self._slot_selected)
+        return tree
+
+    def _create_result_tree(self) -> QTreeWidget:
+        tree = QTreeWidget()
+        tree.setObjectName("personalityResults")
+        tree.setHeaderLabels(["性格キーワード", "系統", "カルマ", "ID", "設定"])
+        tree.setRootIsDecorated(True)
+        tree.setAlternatingRowColors(True)
+        tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        tree.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        tree.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tree.setAccessibleName("性格キーワード候補")
+        header = tree.header()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for column in range(1, 5):
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+        return tree
+
+    def _populate_empty_slots(self) -> None:
+        self.slot_tree.clear()
+        for slot in range(self.SLOT_COUNT):
+            item = QTreeWidgetItem([str(slot + 1), "（未設定）", "-", "-", "-", "変更なし"])
+            item.setData(self.SLOT_COLUMN, Qt.ItemDataRole.UserRole, slot)
+            item.setTextAlignment(self.SLOT_COLUMN, Qt.AlignmentFlag.AlignCenter)
+            self.slot_tree.addTopLevelItem(item)
+
+    def _slot_selected(self, current: QTreeWidgetItem | None, _previous: QTreeWidgetItem | None) -> None:
+        if current is None:
+            return
+        self._sync_active_slot()
+        self._rebuild_results()
+
+    def _sync_active_slot(self) -> None:
+        slot = self._active_slot()
+        self.picker_heading.setText(f"枠 {slot + 1} に設定")
+        keyword_id = self._selected_ids[slot]
+        keyword = self.catalog_by_id.get(keyword_id)
+        if keyword is not None and not self.search_edit.text().strip():
+            self._set_category(keyword.type)
+        self.clear_button.setEnabled(self._editable and keyword_id is not None)
+
+    def _category_clicked(self, button_id: int) -> None:
+        category = self.CATEGORY_ORDER[button_id]
+        self._category = category
+        if self.search_edit.text():
+            self.search_edit.clear()
+        else:
+            self._rebuild_results()
+
+    def _set_category(self, category: str) -> None:
+        if category not in self.category_buttons:
+            return
+        self._category = category
+        self.category_buttons[category].setChecked(True)
+
+    def _rebuild_results(self, _text: str = "") -> None:
+        query = self.search_edit.text().strip().casefold()
+        current_id = self._current_result_id()
+        active_id = self._selected_ids[self._active_slot()]
+        if query:
+            candidates = [keyword for keyword in self.catalog if query in keyword.name.casefold()]
+            self.scope_label.setText(f"全カテゴリを検索: {len(candidates)}件")
+        else:
+            candidates = [keyword for keyword in self.catalog if keyword.type == self._category]
+            self.scope_label.setText(f"{self._category}カテゴリ: 美徳 → 中庸 → 悪徳の順")
+
+        self.result_tree.blockSignals(True)
+        self.result_tree.clear()
+        first_result: QTreeWidgetItem | None = None
+        restore_result: QTreeWidgetItem | None = None
+        for karma in self.KARMA_ORDER:
+            keywords = [keyword for keyword in candidates if keyword.karma == karma]
+            if not keywords:
+                continue
+            group = QTreeWidgetItem([f"{karma} ({len(keywords)}件)"])
+            group.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            group.setIcon(0, self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
+            font = QFont(group.font(0))
+            font.setBold(True)
+            group.setFont(0, font)
+            self.result_tree.addTopLevelItem(group)
+            group.setFirstColumnSpanned(True)
+            for keyword in keywords:
+                assigned_slot = self._slot_for_keyword(keyword.id)
+                if assigned_slot is None:
+                    assigned_text = "-"
+                elif assigned_slot == self._active_slot():
+                    assigned_text = "この枠"
+                else:
+                    assigned_text = f"枠 {assigned_slot + 1}"
+                item = QTreeWidgetItem(
+                    [keyword.name, keyword.type, keyword.karma, str(keyword.id), assigned_text]
+                )
+                item.setData(0, Qt.ItemDataRole.UserRole, keyword.id)
+                item.setToolTip(0, f"{keyword.name} / {keyword.type} / {keyword.karma} / ID {keyword.id}")
+                group.addChild(item)
+                if first_result is None:
+                    first_result = item
+                if keyword.id == current_id or (current_id is None and keyword.id == active_id):
+                    restore_result = item
+            group.setExpanded(True)
+        self.result_tree.blockSignals(False)
+        self.result_tree.setCurrentItem(restore_result or first_result)
+        self._result_selected(self.result_tree.currentItem(), None)
+
+    def _result_selected(
+        self,
+        current: QTreeWidgetItem | None,
+        _previous: QTreeWidgetItem | None,
+    ) -> None:
+        keyword_id = self._keyword_id_from_item(current)
+        keyword = self.catalog_by_id.get(keyword_id)
+        if keyword is None:
+            self.selection_detail_label.setText("候補を選択してください")
+            self.apply_button.setEnabled(False)
+            return
+        assigned_slot = self._slot_for_keyword(keyword.id)
+        active_slot = self._active_slot()
+        details = f"{keyword.name} / {keyword.type} / {keyword.karma} / ID {keyword.id}"
+        if assigned_slot is not None and assigned_slot != active_slot:
+            self.selection_detail_label.setText(f"{details}　すでに枠 {assigned_slot + 1} へ設定されています")
+            self.apply_button.setText("別の枠で使用中")
+            self.apply_button.setEnabled(False)
+        elif assigned_slot == active_slot:
+            self.selection_detail_label.setText(f"{details}　現在この枠に設定されています")
+            self.apply_button.setText("設定済み")
+            self.apply_button.setEnabled(False)
+        else:
+            self.selection_detail_label.setText(details)
+            self.apply_button.setText("この枠に設定")
+            self.apply_button.setEnabled(self._editable)
+
+    def _result_activated(self, item: QTreeWidgetItem, _column: int) -> None:
+        if self._keyword_id_from_item(item) is not None and self.apply_button.isEnabled():
+            self._apply_result()
+
+    def _apply_result(self) -> None:
+        keyword_id = self._current_result_id()
+        if keyword_id is None or not self.apply_button.isEnabled():
+            return
+        slot = self._active_slot()
+        self._selected_ids[slot] = keyword_id
+        self._sync_slot_row(slot)
+        self._sync_active_slot()
         self._sync_summary()
+        self._rebuild_results()
         self.changed.emit()
 
-    def _sync_row(self, slot: int) -> None:
-        keyword_id = self.combos[slot].currentData()
+    def _clear_active_slot(self) -> None:
+        if not self._editable:
+            return
+        slot = self._active_slot()
+        if self._selected_ids[slot] is None:
+            return
+        self._selected_ids[slot] = None
+        self._sync_slot_row(slot)
+        self._sync_active_slot()
+        self._sync_summary()
+        self._rebuild_results()
+        self.changed.emit()
+
+    def _sync_all_slot_rows(self) -> None:
+        for slot in range(self.SLOT_COUNT):
+            self._sync_slot_row(slot)
+
+    def _sync_slot_row(self, slot: int) -> None:
+        item = self.slot_tree.topLevelItem(slot)
+        keyword_id = self._selected_ids[slot]
         keyword = self.catalog_by_id.get(keyword_id)
-        self.type_labels[slot].setText(keyword.type if keyword else "-")
-        self.karma_labels[slot].setText(keyword.karma if keyword else "-")
-        self.id_labels[slot].setText(str(keyword.id) if keyword else "-")
+        if keyword is None:
+            values = ("（未設定）", "-", "-", "-")
+        else:
+            values = (keyword.name, keyword.type, keyword.karma, str(keyword.id))
+        item.setText(self.SLOT_NAME_COLUMN, values[0])
+        item.setText(self.SLOT_TYPE_COLUMN, values[1])
+        item.setText(self.SLOT_KARMA_COLUMN, values[2])
+        item.setText(self.SLOT_ID_COLUMN, values[3])
+        item.setToolTip(self.SLOT_NAME_COLUMN, values[0])
         changed = keyword_id != self.baseline_ids[slot]
-        self.change_labels[slot].setText("変更あり" if changed else "変更なし")
+        item.setText(self.SLOT_CHANGE_COLUMN, "変更あり" if changed else "変更なし")
+        item.setIcon(
+            self.SLOT_CHANGE_COLUMN,
+            self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton) if changed else QIcon(),
+        )
 
     def _sync_summary(self) -> None:
         assigned = sum(keyword_id is not None for keyword_id in self.selected_ids())
         changed = len(self.changed_indices())
         self.summary_label.setText(f"設定済み {assigned} / 6件 | 変更 {changed}件")
+
+    def _active_slot(self) -> int:
+        current = self.slot_tree.currentItem()
+        if current is None:
+            return 0
+        value = current.data(self.SLOT_COLUMN, Qt.ItemDataRole.UserRole)
+        return int(value) if value is not None else 0
+
+    def _slot_for_keyword(self, keyword_id: int) -> int | None:
+        try:
+            return self._selected_ids.index(keyword_id)
+        except ValueError:
+            return None
+
+    def _current_result_id(self) -> int | None:
+        return self._keyword_id_from_item(self.result_tree.currentItem())
+
+    @staticmethod
+    def _keyword_id_from_item(item: QTreeWidgetItem | None) -> int | None:
+        if item is None:
+            return None
+        value = item.data(0, Qt.ItemDataRole.UserRole)
+        return int(value) if value is not None else None

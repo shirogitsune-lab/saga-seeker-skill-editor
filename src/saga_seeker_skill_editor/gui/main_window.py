@@ -51,6 +51,11 @@ from saga_seeker_skill_editor.gui.skill_editor_widget import SkillEditorWidget
 from saga_seeker_skill_editor.gui.skill_list_widget import SkillListWidget
 from saga_seeker_skill_editor.gui.theme_manager import DEFAULT_THEME, ThemeId, ThemeManager, refresh_widget_style
 from saga_seeker_skill_editor.gui.vacant_slot_editor_widget import VacantSlotEditorWidget
+from saga_seeker_skill_editor.gui.window_preferences import (
+    StartupDisplayMode,
+    restore_startup_display,
+    save_startup_display,
+)
 
 
 class MainState(Enum):
@@ -85,6 +90,7 @@ class MainWindow(QMainWindow):
             theme_manager = ThemeManager(app)
             theme_manager.apply_theme(DEFAULT_THEME, persist=False)
         self.theme_manager = theme_manager
+        self.startup_display_mode = restore_startup_display(theme_manager.settings)
         self.setWindowTitle("Saga & Seeker スキルエディター")
         self.resize(1100, 760)
         self.setMinimumSize(860, 600)
@@ -353,6 +359,25 @@ class MainWindow(QMainWindow):
             self.appearance_actions[theme] = action
         self.appearance_action_group.triggered.connect(self._apply_selected_theme)
         self._sync_theme_actions()
+
+        startup_display_menu = view_menu.addMenu("起動時の表示(&S)")
+        self.startup_display_action_group = QActionGroup(self)
+        self.startup_display_action_group.setExclusive(True)
+        self.startup_display_actions: dict[StartupDisplayMode, QAction] = {}
+        startup_labels = {
+            StartupDisplayMode.WINDOWED: "ウィンドウ表示",
+            StartupDisplayMode.MAXIMIZED: "最大化表示（全画面）",
+        }
+        for mode in StartupDisplayMode:
+            action = QAction(startup_labels[mode], self)
+            action.setCheckable(True)
+            action.setData(mode.value)
+            action.setChecked(mode == self.startup_display_mode)
+            self.startup_display_action_group.addAction(action)
+            startup_display_menu.addAction(action)
+            self.startup_display_actions[mode] = action
+        self.startup_display_action_group.triggered.connect(self._save_startup_display)
+
         view_menu.addSeparator()
         view_menu.addAction(self.find_personality_action)
         view_menu.addAction(self.focus_action)
@@ -366,6 +391,10 @@ class MainWindow(QMainWindow):
         selected = theme or self.theme_manager.current_theme
         for action_theme, action in self.appearance_actions.items():
             action.setChecked(action_theme == selected)
+
+    def _save_startup_display(self, action: QAction) -> None:
+        self.startup_display_mode = StartupDisplayMode(str(action.data()))
+        save_startup_display(self.theme_manager.settings, self.startup_display_mode)
 
     def dragEnterEvent(self, event) -> None:  # noqa: N802
         if event.mimeData().hasUrls() and len(event.mimeData().urls()) == 1:

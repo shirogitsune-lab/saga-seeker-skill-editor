@@ -88,8 +88,12 @@ def test_personality_tab_has_six_slots_and_browsable_catalog(tmp_path: Path) -> 
     assert first.text(editor.SLOT_TYPE_COLUMN) == "力"
     assert first.text(editor.SLOT_KARMA_COLUMN) == "美徳"
     assert first.text(editor.SLOT_ID_COLUMN) == "1"
-    assert tuple(editor.category_buttons) == ("力", "知恵", "富", "愛", "法")
+    assert tuple(editor.category_buttons) == ("すべて", "力", "知恵", "富", "愛", "法")
+    assert tuple(editor.karma_buttons) == ("すべて", "美徳", "中庸", "悪徳")
     assert editor.category_buttons["力"].isChecked()
+    assert editor.karma_buttons["すべて"].isChecked()
+    assert editor.category_buttons["力"].sizePolicy().verticalPolicy().name == "Fixed"
+    assert editor.category_buttons["力"].font().pointSizeF() >= 10
     assert editor.visible_result_ids() == tuple(range(1, 31))
     assert [editor.result_tree.topLevelItem(index).text(0) for index in range(3)] == [
         "美徳 (12件)",
@@ -141,7 +145,8 @@ def test_partial_search_crosses_categories_and_keeps_karma_order(tmp_path: Path)
     assert visible
     assert all("無" in keyword.name for keyword in visible)
     assert len({keyword.type for keyword in visible}) > 1
-    assert editor.scope_label.text().startswith("全カテゴリを検索:")
+    assert editor.category_buttons["すべて"].isChecked()
+    assert editor.scope_label.text().startswith("系統: すべて / 傾向: すべて")
     shown_karma = [
         editor.result_tree.topLevelItem(index).text(0).split(" ", 1)[0]
         for index in range(editor.result_tree.topLevelItemCount())
@@ -149,17 +154,33 @@ def test_partial_search_crosses_categories_and_keeps_karma_order(tmp_path: Path)
     assert shown_karma == [karma for karma in editor.KARMA_ORDER if any(k.karma == karma for k in visible)]
 
 
-def test_category_button_clears_search_and_filters_to_one_system(tmp_path: Path) -> None:
+def test_category_filter_combines_with_existing_partial_search(tmp_path: Path) -> None:
     window = _window(tmp_path, [])
     editor = window.personality_editor
     editor.search_edit.setText("気")
 
     editor.category_buttons["愛"].click()
 
-    assert editor.search_edit.text() == ""
+    assert editor.search_edit.text() == "気"
     assert editor.category_buttons["愛"].isChecked()
-    assert {editor.catalog_by_id[keyword_id].type for keyword_id in editor.visible_result_ids()} == {"愛"}
-    assert editor.visible_result_ids() == tuple(range(91, 121))
+    visible = [editor.catalog_by_id[keyword_id] for keyword_id in editor.visible_result_ids()]
+    assert visible
+    assert all(keyword.type == "愛" and "気" in keyword.name for keyword in visible)
+
+
+def test_karma_filter_combines_with_category_and_preserves_order(tmp_path: Path) -> None:
+    window = _window(tmp_path, [])
+    editor = window.personality_editor
+
+    editor.category_buttons["力"].click()
+    editor.karma_buttons["中庸"].click()
+
+    visible = [editor.catalog_by_id[keyword_id] for keyword_id in editor.visible_result_ids()]
+    assert len(visible) == 9
+    assert all(keyword.type == "力" and keyword.karma == "中庸" for keyword in visible)
+    assert editor.result_tree.topLevelItemCount() == 1
+    assert editor.result_tree.topLevelItem(0).text(0) == "中庸 (9件)"
+    assert "系統: 力 / 傾向: 中庸" in editor.scope_label.text()
 
 
 def test_find_shortcut_focuses_search_and_enter_assigns_first_match(tmp_path: Path) -> None:
@@ -188,7 +209,7 @@ def test_search_with_no_matches_disables_assignment(tmp_path: Path) -> None:
     editor.search_edit.setText("一致しない検索語")
 
     assert editor.visible_result_ids() == ()
-    assert editor.scope_label.text() == "全カテゴリを検索: 0件"
+    assert editor.scope_label.text().endswith("/ 0件")
     assert not editor.apply_button.isEnabled()
 
 

@@ -89,15 +89,29 @@ QPushButton[role="danger"] {
     color: @DANGER_TEXT@;
 }
 QPushButton[category="true"] {
-    min-height: 36px;
+    min-height: 38px;
     min-width: 76px;
     padding: 6px 8px;
     text-align: center;
+    font-size: 11pt;
+    font-weight: 600;
 }
-QPushButton[category="true"]:checked {
+QPushButton[filterOption="true"] {
+    min-height: 34px;
+    min-width: 58px;
+    padding: 4px 10px;
+    font-size: 10pt;
+    font-weight: 600;
+}
+QPushButton[category="true"]:checked, QPushButton[filterOption="true"]:checked {
     background: @SELECTION@;
     border: @FOCUS_WIDTH@ solid @FOCUS@;
     color: @SELECTION_TEXT@;
+    font-weight: 600;
+}
+QLabel#filterLabel {
+    min-width: 32px;
+    font-size: 10pt;
     font-weight: 600;
 }
 QLineEdit, QTextEdit, QComboBox {
@@ -144,6 +158,12 @@ QTreeWidget {
     border: @BORDER_WIDTH@ solid @BORDER@;
     selection-background-color: @SELECTION@;
     selection-color: @SELECTION_TEXT@;
+}
+QTreeWidget#personalitySlots, QTreeWidget#personalityResults {
+    font-size: 10pt;
+}
+QTreeWidget#personalitySlots::item, QTreeWidget#personalityResults::item {
+    min-height: 32px;
 }
 QTreeWidget::item {
     min-height: 30px;

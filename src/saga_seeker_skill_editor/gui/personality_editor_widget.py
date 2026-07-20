@@ -29,6 +29,7 @@ from saga_seeker_skill_editor.core.personality_catalog import PersonalityKeyword
 class PersonalityEditorWidget(QWidget):
     changed = Signal()
     SLOT_COUNT = 6
+    FILTER_ALL = "すべて"
     CATEGORY_ORDER = ("力", "知恵", "富", "愛", "法")
     KARMA_ORDER = ("美徳", "中庸", "悪徳")
 
@@ -47,6 +48,8 @@ class PersonalityEditorWidget(QWidget):
         self._selected_ids: list[int | None] = [None] * self.SLOT_COUNT
         self._editable = True
         self._category = self.CATEGORY_ORDER[0]
+        self._karma: str | None = None
+        self._search_active = False
 
         heading = QLabel("性格キーワード")
         heading.setObjectName("characterName")
@@ -72,7 +75,7 @@ class PersonalityEditorWidget(QWidget):
         self.search_edit.setAccessibleName("性格キーワードを検索")
         self.search_edit.setPlaceholderText("キーワード名を部分一致で検索")
         self.search_edit.setClearButtonEnabled(True)
-        self.search_edit.textChanged.connect(self._rebuild_results)
+        self.search_edit.textChanged.connect(self._search_changed)
         self.search_edit.returnPressed.connect(self._apply_result)
         search_label = QLabel("検索")
         search_label.setBuddy(self.search_edit)
@@ -83,21 +86,48 @@ class PersonalityEditorWidget(QWidget):
         self.category_group = QButtonGroup(self)
         self.category_group.setExclusive(True)
         self.category_buttons: dict[str, QPushButton] = {}
+        self._category_filters: tuple[str | None, ...] = (None, *self.CATEGORY_ORDER)
         category_layout = QVBoxLayout()
         category_layout.setContentsMargins(0, 0, 0, 0)
         category_layout.setSpacing(6)
-        for button_id, category in enumerate(self.CATEGORY_ORDER):
-            button = QPushButton(category)
+        for button_id, category in enumerate(self._category_filters):
+            label = self.FILTER_ALL if category is None else category
+            button = QPushButton(label)
             button.setCheckable(True)
             button.setProperty("category", True)
-            button.setAccessibleName(f"{category}カテゴリ")
+            button.setAccessibleName(f"系統: {label}")
             button.setMinimumWidth(82)
-            button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+            button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             self.category_group.addButton(button, button_id)
-            self.category_buttons[category] = button
+            self.category_buttons[label] = button
             category_layout.addWidget(button)
         self.category_buttons[self._category].setChecked(True)
         self.category_group.idClicked.connect(self._category_clicked)
+        category_layout.addStretch(1)
+
+        self.karma_group = QButtonGroup(self)
+        self.karma_group.setExclusive(True)
+        self.karma_buttons: dict[str, QPushButton] = {}
+        self._karma_filters: tuple[str | None, ...] = (None, *self.KARMA_ORDER)
+        karma_layout = QHBoxLayout()
+        karma_layout.setContentsMargins(0, 0, 0, 0)
+        karma_layout.setSpacing(6)
+        karma_label = QLabel("傾向")
+        karma_label.setObjectName("filterLabel")
+        karma_layout.addWidget(karma_label)
+        for button_id, karma in enumerate(self._karma_filters):
+            label = self.FILTER_ALL if karma is None else karma
+            button = QPushButton(label)
+            button.setCheckable(True)
+            button.setProperty("filterOption", True)
+            button.setAccessibleName(f"傾向: {label}")
+            button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            self.karma_group.addButton(button, button_id)
+            self.karma_buttons[label] = button
+            karma_layout.addWidget(button)
+        self.karma_buttons[self.FILTER_ALL].setChecked(True)
+        self.karma_group.idClicked.connect(self._karma_clicked)
+        karma_layout.addStretch(1)
 
         self.result_tree = self._create_result_tree()
         self.result_tree.currentItemChanged.connect(self._result_selected)
@@ -136,6 +166,7 @@ class PersonalityEditorWidget(QWidget):
         picker_layout.setSpacing(7)
         picker_layout.addWidget(self.picker_heading)
         picker_layout.addLayout(search_layout)
+        picker_layout.addLayout(karma_layout)
         picker_layout.addWidget(self.scope_label)
         picker_layout.addLayout(browser_layout, 1)
         picker_layout.addLayout(action_layout)
@@ -170,6 +201,8 @@ class PersonalityEditorWidget(QWidget):
         self.search_edit.setEnabled(self._editable)
         self.result_tree.setEnabled(self._editable)
         for button in self.category_buttons.values():
+            button.setEnabled(self._editable)
+        for button in self.karma_buttons.values():
             button.setEnabled(self._editable)
         self.apply_button.setEnabled(False)
         self.clear_button.setEnabled(self._editable)
@@ -286,35 +319,47 @@ class PersonalityEditorWidget(QWidget):
         slot = self._active_slot()
         self.picker_heading.setText(f"枠 {slot + 1} に設定")
         keyword_id = self._selected_ids[slot]
-        keyword = self.catalog_by_id.get(keyword_id)
-        if keyword is not None and not self.search_edit.text().strip():
-            self._set_category(keyword.type)
         self.clear_button.setEnabled(self._editable and keyword_id is not None)
 
     def _category_clicked(self, button_id: int) -> None:
-        category = self.CATEGORY_ORDER[button_id]
-        self._category = category
-        if self.search_edit.text():
-            self.search_edit.clear()
-        else:
-            self._rebuild_results()
+        self._category = self._category_filters[button_id]
+        self._rebuild_results()
 
-    def _set_category(self, category: str) -> None:
-        if category not in self.category_buttons:
+    def _karma_clicked(self, button_id: int) -> None:
+        self._karma = self._karma_filters[button_id]
+        self._rebuild_results()
+
+    def _set_category(self, category: str | None) -> None:
+        label = self.FILTER_ALL if category is None else category
+        if label not in self.category_buttons:
             return
         self._category = category
-        self.category_buttons[category].setChecked(True)
+        self.category_buttons[label].setChecked(True)
+
+    def _search_changed(self, text: str) -> None:
+        query_active = bool(text.strip())
+        if query_active and not self._search_active:
+            self._set_category(None)
+        self._search_active = query_active
+        self._rebuild_results()
 
     def _rebuild_results(self, _text: str = "") -> None:
         query = self.search_edit.text().strip().casefold()
         current_id = self._current_result_id()
         active_id = self._selected_ids[self._active_slot()]
+        candidates = [
+            keyword
+            for keyword in self.catalog
+            if (self._category is None or keyword.type == self._category)
+            and (self._karma is None or keyword.karma == self._karma)
+            and (not query or query in keyword.name.casefold())
+        ]
+        category_text = self.FILTER_ALL if self._category is None else self._category
+        karma_text = self.FILTER_ALL if self._karma is None else self._karma
+        scope = f"系統: {category_text} / 傾向: {karma_text}"
         if query:
-            candidates = [keyword for keyword in self.catalog if query in keyword.name.casefold()]
-            self.scope_label.setText(f"全カテゴリを検索: {len(candidates)}件")
-        else:
-            candidates = [keyword for keyword in self.catalog if keyword.type == self._category]
-            self.scope_label.setText(f"{self._category}カテゴリ: 美徳 → 中庸 → 悪徳の順")
+            scope += f" / 部分一致検索: {self.search_edit.text().strip()}"
+        self.scope_label.setText(f"{scope} / {len(candidates)}件")
 
         self.result_tree.blockSignals(True)
         self.result_tree.clear()

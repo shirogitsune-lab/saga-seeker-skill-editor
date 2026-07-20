@@ -15,6 +15,7 @@ from saga_seeker_skill_editor.gui.theme_manager import (
     ThemeId,
     ThemeManager,
 )
+from saga_seeker_skill_editor.gui.window_preferences import show_with_startup_display
 from saga_seeker_skill_editor.resources import resource_path
 
 
@@ -42,7 +43,7 @@ def run_gui(
         return 4
     if icon_path.exists():
         window.setWindowIcon(QIcon(str(icon_path)))
-    window.show()
+    show_with_startup_display(window, window.startup_display_mode)
     if exit_after_ms is not None:
         QTimer.singleShot(max(0, exit_after_ms), app.quit)
     return app.exec()

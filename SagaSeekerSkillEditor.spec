@@ -5,6 +5,7 @@ from pathlib import Path
 
 root = Path.cwd()
 icon = root / "assets" / "kanaria.ico"
+assets = root / "assets"
 styles = root / "src" / "saga_seeker_skill_editor" / "gui" / "styles"
 data = root / "src" / "saga_seeker_skill_editor" / "data"
 
@@ -13,7 +14,7 @@ a = Analysis(
     pathex=[str(root / "src")],
     binaries=[],
     datas=[
-        (str(icon), "assets"),
+        (str(assets), "assets"),
         (str(styles), "saga_seeker_skill_editor/gui/styles"),
         (str(data), "saga_seeker_skill_editor/data"),
     ],

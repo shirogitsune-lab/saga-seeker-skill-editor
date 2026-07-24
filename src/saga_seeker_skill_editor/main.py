@@ -28,12 +28,21 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--image-smoke",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     options = parser.parse_args(argv)
+    if options.image_smoke:
+        from saga_seeker_skill_editor.gui.image_smoke import run_image_smoke
+
+        return run_image_smoke()
     try:
         from saga_seeker_skill_editor.gui.app import run_gui
     except ModuleNotFoundError as exc:

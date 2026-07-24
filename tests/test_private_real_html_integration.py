@@ -77,7 +77,8 @@ def test_real_input_directory_summary_is_parseable_for_supported_sheets() -> Non
         else:
             loaded += 1
 
-    assert loaded >= 100
+    assert len(html_files) >= 151
+    assert loaded >= 150
     assert rejected >= 1
 
 

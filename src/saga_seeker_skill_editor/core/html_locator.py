@@ -36,6 +36,14 @@ class LiSpan:
     inner: bytes
 
 
+@dataclass(frozen=True)
+class StartTagSpan:
+    start: int
+    end: int
+    attrs: dict[str, str]
+    raw: bytes
+
+
 _TAG_RE = re.compile(rb"<\s*(/)?\s*([A-Za-z][A-Za-z0-9:-]*)([^<>]*)>")
 _ATTR_RE = re.compile(
     rb"""([^\s"'<>/=]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))""",
@@ -94,12 +102,140 @@ def find_unique_script_json(html_bytes: bytes) -> ElementSpan:
     return candidates[0]
 
 
+def find_unique_start_tag_by_id(
+    html_bytes: bytes,
+    element_id: str,
+    *,
+    tag_name: str | None = None,
+) -> StartTagSpan:
+    candidates: list[StartTagSpan] = []
+    wanted_tag = tag_name.lower() if tag_name is not None else None
+    for match in _TAG_RE.finditer(html_bytes):
+        if match.group(1):
+            continue
+        found_tag = match.group(2).decode("ascii", errors="ignore").lower()
+        if wanted_tag is not None and found_tag != wanted_tag:
+            continue
+        attrs = parse_attrs(match.group(3))
+        if attrs.get("id") != element_id:
+            continue
+        candidates.append(
+            StartTagSpan(
+                start=match.start(),
+                end=match.end(),
+                attrs=attrs,
+                raw=html_bytes[match.start() : match.end()],
+            )
+        )
+    if len(candidates) != 1:
+        raise HtmlStructureError(
+            f"expected one {element_id} start tag, found {len(candidates)}"
+        )
+    return candidates[0]
+
+
 def find_unique_skills_ul(html_bytes: bytes) -> ElementSpan:
     return _find_unique_ul_by_id(html_bytes, "skills-value")
 
 
 def find_unique_personality_ul(html_bytes: bytes) -> ElementSpan:
     return _find_unique_ul_by_id(html_bytes, "personality-value")
+
+
+def find_unique_abilities_ul(html_bytes: bytes) -> ElementSpan:
+    return _find_unique_ul_by_id(html_bytes, "abilities-value")
+
+
+def find_unique_memories_ul(html_bytes: bytes) -> ElementSpan:
+    return _find_unique_ul_by_id(html_bytes, "memories-value")
+
+
+def find_unique_element_by_id(html_bytes: bytes, element_id: str) -> ElementSpan:
+    """Locate one non-void element by ID without parsing or normalizing HTML."""
+
+    candidates: list[ElementSpan] = []
+    for match in _TAG_RE.finditer(html_bytes):
+        is_close, tag_name_bytes, raw_attrs = match.group(1), match.group(2), match.group(3)
+        if is_close:
+            continue
+        attrs = parse_attrs(raw_attrs)
+        if attrs.get("id") != element_id:
+            continue
+        tag_name = tag_name_bytes.decode("ascii", errors="ignore").lower()
+        end_tag_start, end_tag_end = _find_matching_end(html_bytes, match.end(), tag_name)
+        candidates.append(
+            ElementSpan(
+                start=match.start(),
+                end=end_tag_end,
+                start_tag_start=match.start(),
+                start_tag_end=match.end(),
+                content_start=match.end(),
+                content_end=end_tag_start,
+                end_tag_start=end_tag_start,
+                end_tag_end=end_tag_end,
+            )
+        )
+    if len(candidates) != 1:
+        raise HtmlStructureError(f"expected one {element_id} element, found {len(candidates)}")
+    return candidates[0]
+
+
+def find_unique_descendant_by_attrs(
+    html_bytes: bytes,
+    container: ElementSpan,
+    *,
+    tag_name: str,
+    required_attrs: dict[str, str],
+) -> ElementSpan:
+    """Locate one matching descendant element within an established container."""
+
+    wanted_tag = tag_name.lower()
+    candidates: list[ElementSpan] = []
+    for match in _TAG_RE.finditer(
+        html_bytes,
+        container.content_start,
+        container.content_end,
+    ):
+        if match.group(1):
+            continue
+        found_tag = match.group(2).decode("ascii", errors="ignore").lower()
+        if found_tag != wanted_tag:
+            continue
+        attrs = parse_attrs(match.group(3))
+        if any(
+            (
+                required not in attrs.get(name, "").split()
+                if name == "class"
+                else attrs.get(name) != required
+            )
+            for name, required in required_attrs.items()
+        ):
+            continue
+        end_tag_start, end_tag_end = _find_matching_end(
+            html_bytes,
+            match.end(),
+            wanted_tag,
+        )
+        if end_tag_end > container.content_end:
+            continue
+        candidates.append(
+            ElementSpan(
+                start=match.start(),
+                end=end_tag_end,
+                start_tag_start=match.start(),
+                start_tag_end=match.end(),
+                content_start=match.end(),
+                content_end=end_tag_start,
+                end_tag_start=end_tag_start,
+                end_tag_end=end_tag_end,
+            )
+        )
+    if len(candidates) != 1:
+        description = ", ".join(f"{key}={value!r}" for key, value in required_attrs.items())
+        raise HtmlStructureError(
+            f"expected one {tag_name} descendant with {description}, found {len(candidates)}"
+        )
+    return candidates[0]
 
 
 def _find_unique_ul_by_id(html_bytes: bytes, element_id: str) -> ElementSpan:

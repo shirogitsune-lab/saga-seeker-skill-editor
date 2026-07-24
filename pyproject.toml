@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "saga-seeker-skill-editor"
-version = "1.2.0"
-description = "A local Windows GUI editor for Saga & Seeker character sheet skills and personality keywords."
+version = "2.0.0"
+description = "A local Windows GUI editor for Saga & Seeker character sheets."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [

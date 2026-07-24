@@ -77,8 +77,8 @@ def test_main_window_loads_synthetic_sheet_offscreen(tmp_path: Path) -> None:
     assert len(window.skill_widgets) == 1
     assert window.skill_widgets[0].name_edit.text() == "GUI Smoke"
     assert window.main_state == MainState.NORMAL
-    assert not window.save_button.isEnabled()
-    assert window.save_button.toolTip() == "変更がないため保存できません"
+    assert window.save_button.isEnabled()
+    assert "元のバイトを変更せず" in window.save_button.toolTip()
     assert window.skill_list.topLevelItemCount() == 1
 
 

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+from uuid import uuid4
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
@@ -12,6 +14,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -27,8 +30,25 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from saga_seeker_skill_editor.core.character_sheet import CharacterSheet, CharacterSheetError, load_character_sheet
+from saga_seeker_skill_editor.core.character_sheet import (
+    CharacterSheet,
+    CharacterSheetDraft,
+    CharacterSheetError,
+    CharacterSheetRenderError,
+    create_character_sheet,
+    load_character_sheet,
+    render_character_sheet,
+    validate_rendered_character_sheet,
+)
 from saga_seeker_skill_editor.core.file_writer import SaveError, atomic_save_bytes
+from saga_seeker_skill_editor.core.markdown_interchange import (
+    MarkdownImportError,
+    MarkdownImportPlan,
+    create_character_sheet_from_markdown,
+    parse_character_markdown,
+    render_ai_markdown,
+)
+from saga_seeker_skill_editor.core.phase0_candidate_sheet import GenerationInputs
 from saga_seeker_skill_editor.core.personality_catalog import (
     PersonalityCatalogError,
     load_personality_catalog,
@@ -46,9 +66,19 @@ from saga_seeker_skill_editor.core.sheet_editor import (
 )
 from saga_seeker_skill_editor.core.skill_classifier import SkillKind
 from saga_seeker_skill_editor.gui.collapsible_section import CollapsibleSection
+from saga_seeker_skill_editor.gui.character_details_widget import (
+    CharacterDetailsWidget,
+)
+from saga_seeker_skill_editor.gui.image_crop_dialog import ImageCropDialog
+from saga_seeker_skill_editor.gui.image_pipeline import (
+    ImageSafetyError,
+    inspect_image_path,
+)
+from saga_seeker_skill_editor.gui.memory_editor_widget import MemoryEditorWidget
 from saga_seeker_skill_editor.gui.personality_editor_widget import PersonalityEditorWidget
 from saga_seeker_skill_editor.gui.skill_editor_widget import SkillEditorWidget
 from saga_seeker_skill_editor.gui.skill_list_widget import SkillListWidget
+from saga_seeker_skill_editor.gui.status_editor_widget import StatusEditorWidget
 from saga_seeker_skill_editor.gui.theme_manager import DEFAULT_THEME, ThemeId, ThemeManager, refresh_widget_style
 from saga_seeker_skill_editor.gui.vacant_slot_editor_widget import VacantSlotEditorWidget
 from saga_seeker_skill_editor.gui.window_preferences import (
@@ -56,6 +86,7 @@ from saga_seeker_skill_editor.gui.window_preferences import (
     restore_startup_display,
     save_startup_display,
 )
+from saga_seeker_skill_editor.resources import resource_path
 
 
 class MainState(Enum):
@@ -91,11 +122,12 @@ class MainWindow(QMainWindow):
             theme_manager.apply_theme(DEFAULT_THEME, persist=False)
         self.theme_manager = theme_manager
         self.startup_display_mode = restore_startup_display(theme_manager.settings)
-        self.setWindowTitle("Saga & Seeker スキルエディター")
+        self.setWindowTitle("Saga & Seeker キャラクターシートエディター")
         self.resize(1100, 760)
         self.setMinimumSize(860, 600)
         self.current_path: Path | None = None
         self.sheet: CharacterSheet | None = None
+        self.character_draft: CharacterSheetDraft | None = None
         self.skill_widgets: list[SkillEditorWidget | VacantSlotEditorWidget] = []
         try:
             self.personality_catalog = load_personality_catalog()
@@ -132,15 +164,33 @@ class MainWindow(QMainWindow):
         return self._has_changes()
 
     def _has_changes(self) -> bool:
-        return bool(self.changed_indices or self.personality_changed_indices)
+        return bool(
+            self.changed_indices
+            or self.personality_changed_indices
+            or (
+                self.character_draft is not None
+                and self.character_draft.has_changes
+            )
+        )
 
     def _change_count(self) -> int:
-        return len(self.changed_indices) + len(self.personality_changed_indices)
+        return (
+            len(self.changed_indices)
+            + len(self.personality_changed_indices)
+            + int(
+                self.character_draft is not None
+                and self.character_draft.has_changes
+            )
+        )
 
     def _create_actions(self) -> None:
         self.open_action = QAction("HTMLファイルを開く", self)
         self.open_action.setShortcut(QKeySequence.StandardKey.Open)
         self.open_action.triggered.connect(self.open_file)
+
+        self.new_action = QAction("新規キャラクターシート", self)
+        self.new_action.setShortcut(QKeySequence.StandardKey.New)
+        self.new_action.triggered.connect(self.create_new_sheet)
 
         self.save_action = QAction("別名で保存", self)
         self.save_action.setShortcut(QKeySequence.StandardKey.SaveAs)
@@ -162,13 +212,34 @@ class MainWindow(QMainWindow):
         self.find_personality_action.setShortcut(QKeySequence.StandardKey.Find)
         self.find_personality_action.triggered.connect(self._focus_personality_search)
 
+        self.import_markdown_action = QAction("Markdownから新規作成", self)
+        self.import_markdown_action.setShortcut(QKeySequence("Ctrl+Alt+M"))
+        self.import_markdown_action.triggered.connect(self.import_markdown)
+
+        self.export_markdown_action = QAction("AI向けMarkdownを書き出す", self)
+        self.export_markdown_action.setShortcut(QKeySequence("Ctrl+Shift+M"))
+        self.export_markdown_action.triggered.connect(self.export_ai_markdown)
+
+        self.profile_comparison_action = QAction(
+            "プロフィール比較を別ウィンドウで開く",
+            self,
+        )
+        self.profile_comparison_action.setShortcut(QKeySequence("Ctrl+Shift+P"))
+        self.profile_comparison_action.triggered.connect(
+            self._open_profile_comparison
+        )
+
         for action in (
             self.open_action,
+            self.new_action,
             self.save_action,
             self.reload_action,
             self.close_action,
             self.focus_action,
             self.find_personality_action,
+            self.import_markdown_action,
+            self.export_markdown_action,
+            self.profile_comparison_action,
         ):
             self.addAction(action)
 
@@ -185,6 +256,26 @@ class MainWindow(QMainWindow):
         self.open_button = QPushButton("HTMLファイルを開く")
         self.open_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
         self.open_button.clicked.connect(self.open_action.trigger)
+        self.new_button = QPushButton("新規作成")
+        self.new_button.setIcon(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)
+        )
+        self.new_button.clicked.connect(self.new_action.trigger)
+        self.import_markdown_button = QPushButton("Markdownから新規作成")
+        self.import_markdown_button.setToolTip(
+            "Markdownから基本項目・ステータス・性格キーワード・"
+            "スキルを取り込み、新しいシートを作成します"
+        )
+        self.import_markdown_button.clicked.connect(
+            self.import_markdown_action.trigger
+        )
+        self.export_markdown_button = QPushButton("Markdownを書き出す")
+        self.export_markdown_button.setToolTip(
+            "画像や内部IDを含まない、AIへ渡すためのMarkdownを書き出します"
+        )
+        self.export_markdown_button.clicked.connect(
+            self.export_markdown_action.trigger
+        )
         self.reload_button = QPushButton("再読込")
         self.reload_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
         self.reload_button.clicked.connect(self.reload_action.trigger)
@@ -195,9 +286,14 @@ class MainWindow(QMainWindow):
         heading.addWidget(self.file_label)
         heading.addWidget(self.slot_summary_label)
 
-        commands = QHBoxLayout()
-        commands.addWidget(self.open_button)
-        commands.addWidget(self.reload_button)
+        commands = QGridLayout()
+        commands.setHorizontalSpacing(6)
+        commands.setVerticalSpacing(6)
+        commands.addWidget(self.open_button, 0, 0)
+        commands.addWidget(self.new_button, 0, 1)
+        commands.addWidget(self.import_markdown_button, 0, 2)
+        commands.addWidget(self.export_markdown_button, 1, 0, 1, 2)
+        commands.addWidget(self.reload_button, 1, 2)
 
         top = QHBoxLayout()
         top.addLayout(heading, 1)
@@ -224,18 +320,39 @@ class MainWindow(QMainWindow):
         empty_title = QLabel("Saga & Seeker キャラクターシート")
         empty_title.setObjectName("characterName")
         empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        empty_note = QLabel("編集するHTMLファイルを選択してください")
+        empty_note = QLabel(
+            "既存のHTMLを開く、新規作成する、またはMarkdownから新規作成してください"
+        )
         empty_note.setObjectName("mutedText")
         empty_note.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_open_button = QPushButton("HTMLファイルを開く")
         self.empty_open_button.setProperty("role", "primary")
         self.empty_open_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
         self.empty_open_button.clicked.connect(self.open_action.trigger)
+        self.empty_new_button = QPushButton("新規作成")
+        self.empty_new_button.setIcon(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)
+        )
+        self.empty_new_button.clicked.connect(self.new_action.trigger)
+        self.empty_import_markdown_button = QPushButton("Markdownから新規作成")
+        self.empty_import_markdown_button.setToolTip(
+            "AI向けMarkdownから基本項目・ステータス・性格キーワード・"
+            "スキルを安全側で取り込みます"
+        )
+        self.empty_import_markdown_button.clicked.connect(
+            self.import_markdown_action.trigger
+        )
+        empty_actions = QHBoxLayout()
+        empty_actions.addStretch(1)
+        empty_actions.addWidget(self.empty_open_button)
+        empty_actions.addWidget(self.empty_new_button)
+        empty_actions.addWidget(self.empty_import_markdown_button)
+        empty_actions.addStretch(1)
         empty_layout = QVBoxLayout(self.empty_page)
         empty_layout.addStretch(2)
         empty_layout.addWidget(empty_title)
         empty_layout.addWidget(empty_note)
-        empty_layout.addWidget(self.empty_open_button, 0, Qt.AlignmentFlag.AlignCenter)
+        empty_layout.addLayout(empty_actions)
         empty_layout.addStretch(3)
 
         self.skill_list = SkillListWidget()
@@ -272,9 +389,38 @@ class MainWindow(QMainWindow):
         personality_scroll.setFrameShape(QFrame.Shape.NoFrame)
         personality_scroll.setWidget(self.personality_editor)
 
+        self.character_details_editor = CharacterDetailsWidget()
+        self.character_details_editor.changed.connect(self._recalculate_changes)
+        self.character_details_editor.replace_icon_requested.connect(
+            self._replace_icon
+        )
+        details_scroll = QScrollArea()
+        details_scroll.setWidgetResizable(True)
+        details_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        details_scroll.setWidget(self.character_details_editor)
+
+        self.status_editor = StatusEditorWidget()
+        self.status_editor.changed.connect(self._recalculate_changes)
+        status_scroll = QScrollArea()
+        status_scroll.setWidgetResizable(True)
+        status_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        status_scroll.setWidget(self.status_editor)
+
+        self.memory_editor = MemoryEditorWidget(self._generation_inputs)
+        self.memory_editor.changed.connect(self._recalculate_changes)
+
         self.edit_tabs = QTabWidget()
-        self.edit_tabs.addTab(skill_page, "スキル")
-        self.edit_tabs.addTab(personality_scroll, "性格キーワード")
+        self.basic_tab_index = self.edit_tabs.addTab(details_scroll, "基本情報")
+        self.status_tab_index = self.edit_tabs.addTab(status_scroll, "ステータス")
+        self.skill_tab_index = self.edit_tabs.addTab(skill_page, "スキル")
+        self.personality_tab_index = self.edit_tabs.addTab(
+            personality_scroll,
+            "性格キーワード",
+        )
+        self.memory_tab_index = self.edit_tabs.addTab(
+            self.memory_editor,
+            "思い出",
+        )
 
         self.loaded_page = QWidget()
         loaded_layout = QVBoxLayout(self.loaded_page)
@@ -333,10 +479,13 @@ class MainWindow(QMainWindow):
 
     def _create_menu(self) -> None:
         file_menu = self.menuBar().addMenu("ファイル(&F)")
+        file_menu.addAction(self.new_action)
+        file_menu.addAction(self.import_markdown_action)
         file_menu.addAction(self.open_action)
         file_menu.addAction(self.reload_action)
         file_menu.addSeparator()
         file_menu.addAction(self.save_action)
+        file_menu.addAction(self.export_markdown_action)
         file_menu.addSeparator()
         file_menu.addAction(self.close_action)
 
@@ -379,6 +528,7 @@ class MainWindow(QMainWindow):
         self.startup_display_action_group.triggered.connect(self._save_startup_display)
 
         view_menu.addSeparator()
+        view_menu.addAction(self.profile_comparison_action)
         view_menu.addAction(self.find_personality_action)
         view_menu.addAction(self.focus_action)
 
@@ -399,22 +549,288 @@ class MainWindow(QMainWindow):
     def dragEnterEvent(self, event) -> None:  # noqa: N802
         if event.mimeData().hasUrls() and len(event.mimeData().urls()) == 1:
             path = Path(event.mimeData().urls()[0].toLocalFile())
-            if path.suffix.lower() == ".html":
+            if path.suffix.lower() in {".html", ".md", ".markdown"}:
                 event.acceptProposedAction()
 
     def dropEvent(self, event) -> None:  # noqa: N802
         urls = event.mimeData().urls()
         if urls:
-            self.load_path(Path(urls[0].toLocalFile()))
+            path = Path(urls[0].toLocalFile())
+            if path.suffix.lower() in {".md", ".markdown"}:
+                self.import_markdown_path(path)
+            else:
+                self.load_path(path)
 
     def open_file(self) -> None:
         path = self._choose_open_path()
         if path is not None:
             self.load_path(path)
 
+    def import_markdown(self) -> bool:
+        path = self._choose_markdown_open_path()
+        return self.import_markdown_path(path) if path is not None else False
+
+    def import_markdown_path(self, path: Path) -> bool:
+        try:
+            plan = parse_character_markdown(
+                path.read_bytes(),
+                catalog=self.personality_catalog,
+            )
+        except (OSError, MarkdownImportError) as exc:
+            self._record_error(
+                title="Markdown読込エラー",
+                cause="Markdownを安全に解析できませんでした。",
+                impact="現在開いているシートと編集中の内容は保持されています。",
+                remedy="UTF-8のMarkdownか、別のファイルを選択してください。",
+                details=str(exc),
+            )
+            return False
+        if not plan.can_create:
+            self._present_markdown_import_issues(plan)
+            return False
+        if not self._confirm_markdown_import(plan):
+            return False
+
+        try:
+            icon_path = resource_path("assets/カナリア.webp")
+            inspect_image_path(icon_path)
+            sheet = load_character_sheet(
+                create_character_sheet_from_markdown(
+                    plan,
+                    icon_webp=icon_path.read_bytes(),
+                    generation=self._generation_inputs(),
+                )
+            )
+        except (
+            OSError,
+            ImageSafetyError,
+            CharacterSheetError,
+            CharacterSheetRenderError,
+            MarkdownImportError,
+        ) as exc:
+            self._record_error(
+                title="Markdown取込エラー",
+                cause="解析結果から新しいキャラクターシートを生成できませんでした。",
+                impact="現在開いているシートと編集中の内容は保持されています。",
+                remedy="警告内容を確認し、Markdownを修正してください。",
+                details=str(exc),
+            )
+            return False
+        if not self._resolve_unsaved_changes():
+            return False
+        self._apply_sheet(None, sheet)
+        self.status_detail_label.setText(
+            f"{path.name} から新規シートを作成しました。画像は既定値です"
+        )
+        return True
+
+    def export_ai_markdown(self) -> bool:
+        self._recalculate_changes()
+        if self.sheet is None:
+            return False
+        if self.validation_error is not None:
+            self._present_validation_error(self.validation_error)
+            return False
+        for widget in self.skill_widgets:
+            if widget.state().changed and not widget.prepare_for_save():
+                return False
+        try:
+            current = load_character_sheet(self._render_current_edits())
+            markdown = render_ai_markdown(current)
+        except (
+            SheetEditError,
+            CharacterSheetError,
+            CharacterSheetRenderError,
+            ValueError,
+        ) as exc:
+            self._record_error(
+                title="Markdown書出しエラー",
+                cause="現在の編集内容をAI向けMarkdownへ変換できませんでした。",
+                impact="HTMLの基準状態と編集中の内容は変更されていません。",
+                remedy="入力エラーを修正して、もう一度書き出してください。",
+                details=str(exc),
+            )
+            return False
+
+        destination = self._choose_markdown_save_path()
+        if destination is None:
+            return False
+        overwrite_confirmed = False
+        if destination.exists():
+            result = QMessageBox.warning(
+                self,
+                "上書き確認",
+                "保存先に既存ファイルがあります。置き換えてよろしいですか？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if result != QMessageBox.StandardButton.Yes:
+                return False
+            overwrite_confirmed = True
+        try:
+            atomic_save_bytes(
+                destination,
+                markdown,
+                overwrite_confirmed=overwrite_confirmed,
+            )
+        except SaveError as exc:
+            self._record_error(
+                title="Markdown保存エラー",
+                cause="AI向けMarkdownを指定した保存先へ書き込めませんでした。",
+                impact="HTMLの基準状態と編集中の内容は変更されていません。",
+                remedy="保存先やアクセス権を確認してください。",
+                details=str(exc),
+            )
+            return False
+        self.status_detail_label.setText(
+            f"AI向けMarkdownを書き出しました: {destination.name}"
+        )
+        return True
+
+    def _choose_markdown_open_path(self) -> Path | None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Markdownから新規作成",
+            "",
+            "Markdown Files (*.md *.markdown)",
+        )
+        return Path(path) if path else None
+
+    def _choose_markdown_save_path(self) -> Path | None:
+        if self.sheet is None:
+            return None
+        default_name = f"{self.character_details_editor.current_name() or 'character'}_AI向け.md"
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "AI向けMarkdownを書き出す",
+            default_name,
+            "Markdown Files (*.md)",
+        )
+        return Path(path) if path else None
+
+    def _present_markdown_import_issues(self, plan: MarkdownImportPlan) -> None:
+        messages = "\n".join(
+            f"・{issue.message}"
+            for issue in plan.issues
+            if issue.severity == "error"
+        )
+        QMessageBox.warning(
+            self,
+            "Markdownを取り込めません",
+            messages or "取り込み可能な項目を確認できませんでした。",
+        )
+
+    def _confirm_markdown_import(self, plan: MarkdownImportPlan) -> bool:
+        warning_lines = [
+            f"・{issue.message}"
+            for issue in plan.issues
+            if issue.severity == "warning"
+        ]
+        personality_count = len(plan.personalities)
+        summary = (
+            "次の内容で新しいキャラクターシートを作成します。\n\n"
+            f"名前: {plan.name or '（空欄）'}\n"
+            f"性格キーワード: {personality_count}件\n"
+            f"スキル: {len(plan.skills)}件\n\n"
+            "画像・思い出・内部IDは復元されません。"
+            "スキルはすべて新規オリジナルスキルになります。"
+        )
+        if plan.legacy_format:
+            summary += "\n旧形式Markdownのため、性格キーワードは枠1から順に配置します。"
+        if warning_lines:
+            summary += "\n\n警告\n" + "\n".join(warning_lines[:10])
+        result = QMessageBox.question(
+            self,
+            "Markdown取込プレビュー",
+            summary + "\n\nこの内容で新規作成しますか？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return result == QMessageBox.StandardButton.Yes
+
+    def _open_profile_comparison(self) -> None:
+        if self.sheet is not None:
+            self.character_details_editor.open_profile_comparison()
+
+    def create_new_sheet(self) -> bool:
+        if not self._resolve_unsaved_changes():
+            return False
+        try:
+            icon_path = resource_path("assets/カナリア.webp")
+            inspect_image_path(icon_path)
+            icon_webp = icon_path.read_bytes()
+            sheet = load_character_sheet(
+                create_character_sheet(
+                    icon_webp=icon_webp,
+                    generation=self._generation_inputs(),
+                )
+            )
+        except (
+            OSError,
+            ImageSafetyError,
+            CharacterSheetError,
+            CharacterSheetRenderError,
+        ) as exc:
+            self._record_error(
+                title="新規作成エラー",
+                cause="新しいキャラクターシートを安全に作成できませんでした。",
+                impact="現在開いているシートと編集中の内容は保持されています。",
+                remedy="アプリを再起動するか、配布ファイルを再展開してください。",
+                details=str(exc),
+            )
+            return False
+        self._apply_sheet(None, sheet)
+        self.status_detail_label.setText(
+            "新規シートを作成しました。別名で保存してください"
+        )
+        return True
+
     def _choose_open_path(self) -> Path | None:
         path, _ = QFileDialog.getOpenFileName(self, "キャラクターシートを開く", "", "HTML Files (*.html)")
         return Path(path) if path else None
+
+    @staticmethod
+    def _generation_inputs() -> GenerationInputs:
+        local_timezone = datetime.now().astimezone().tzinfo
+        if local_timezone is None:
+            local_timezone = timezone.utc
+        return GenerationInputs(
+            uuid_factory=uuid4,
+            clock=lambda: datetime.now(timezone.utc),
+            local_timezone=local_timezone,
+        )
+
+    def _replace_icon(self) -> None:
+        if self.sheet is None or self.character_draft is None:
+            return
+        selected, _ = QFileDialog.getOpenFileName(
+            self,
+            "キャラクター画像を選択",
+            "",
+            "Images (*.png *.jpg *.jpeg *.webp)",
+        )
+        if not selected:
+            return
+        try:
+            path = Path(selected)
+            inspect_image_path(path)
+            encoded = path.read_bytes()
+            dialog = ImageCropDialog(encoded, self)
+            if dialog.exec() != ImageCropDialog.DialogCode.Accepted:
+                return
+            webp = dialog.processed_webp()
+            self.character_draft.set_icon_webp(webp)
+        except (OSError, ImageSafetyError, CharacterSheetRenderError) as exc:
+            self._record_error(
+                title="画像読込エラー",
+                cause="選択した画像を安全に処理できませんでした。",
+                impact="現在の画像と編集中の内容は変更されていません。",
+                remedy="PNG・JPEG・WebPの別画像を選択してください。",
+                details=str(exc),
+            )
+            return
+        self.character_details_editor.set_replacement_preview(webp)
+        self._recalculate_changes()
 
     def reload_current_file(self) -> None:
         if self.current_path is not None:
@@ -442,20 +858,24 @@ class MainWindow(QMainWindow):
         self._apply_sheet(path, sheet)
         return True
 
-    def _apply_sheet(self, path: Path, sheet: CharacterSheet) -> None:
+    def _apply_sheet(self, path: Path | None, sheet: CharacterSheet) -> None:
         self.current_path = path
         self.sheet = sheet
+        self.character_draft = CharacterSheetDraft.from_sheet(sheet)
         self.active_error = None
         self.validation_error = None
         self.character_label.setText(sheet.character_name or "名称未設定のキャラクター")
-        self.file_label.setText(path.name)
-        self.file_label.setToolTip(str(path))
+        self.file_label.setText(path.name if path is not None else "新規シート（未保存）")
+        self.file_label.setToolTip(str(path) if path is not None else "")
         self.slot_summary_label.setText(
             f"スキル欄: 登録済み {len(sheet.entries)} / 全{sheet.slot_count}枠 | "
             f"未使用枠 {sheet.vacant_slot_count} | "
             f"性格キーワード {len(sheet.personality_entries)} / {sheet.personality_slot_count or 6}件"
         )
-        self.path_value.setText(str(path))
+        self.path_value.setText(str(path) if path is not None else "未保存")
+        self.character_details_editor.set_sheet(sheet, self.character_draft)
+        self.status_editor.set_sheet(sheet, self.character_draft)
+        self.memory_editor.set_sheet(sheet, self.character_draft)
         self._rebuild_skill_widgets()
         self.personality_editor.set_sheet(sheet)
         if self.personality_catalog_error:
@@ -467,7 +887,7 @@ class MainWindow(QMainWindow):
 
     def save_as(self) -> bool:
         self._recalculate_changes()
-        if self.sheet is None or not self._has_changes() or self.sheet.read_only:
+        if self.sheet is None or self.sheet.whole_sheet_read_only:
             return False
         if self.validation_error is not None:
             self._present_validation_error(self.validation_error)
@@ -475,6 +895,25 @@ class MainWindow(QMainWindow):
         for widget in self.skill_widgets:
             if widget.state().changed and not widget.prepare_for_save():
                 return False
+
+        try:
+            rendered = self._render_current_edits()
+            rendered_sheet = validate_rendered_character_sheet(
+                self.sheet,
+                rendered,
+            )
+        except (SheetEditError, CharacterSheetError, CharacterSheetRenderError) as exc:
+            self._record_error(
+                title="保存エラー",
+                cause="編集内容を安全なキャラクターシートとして生成できませんでした。",
+                impact="読み込み済みデータと編集中の内容は保持されています。",
+                remedy="読み取り専用表示と入力内容を確認してください。",
+                details=str(exc),
+            )
+            return False
+        warnings = self._advisory_warnings(rendered_sheet)
+        if warnings and not self._confirm_advisory_warnings(warnings):
+            return False
 
         destination = self._choose_save_path()
         if destination is None:
@@ -493,10 +932,11 @@ class MainWindow(QMainWindow):
             overwrite_confirmed = True
 
         try:
-            rendered = self._render_current_edits()
-
             def validate_temp(temp_path: Path) -> None:
-                load_character_sheet(temp_path.read_bytes())
+                validate_rendered_character_sheet(
+                    self.sheet,
+                    temp_path.read_bytes(),
+                )
 
             atomic_save_bytes(
                 destination,
@@ -504,8 +944,17 @@ class MainWindow(QMainWindow):
                 overwrite_confirmed=overwrite_confirmed,
                 validate_temp_path=validate_temp,
             )
-            saved_sheet = load_character_sheet(rendered)
-        except (SaveError, SheetEditError, CharacterSheetError, OSError) as exc:
+            saved_sheet = validate_rendered_character_sheet(
+                self.sheet,
+                destination.read_bytes(),
+            )
+        except (
+            SaveError,
+            SheetEditError,
+            CharacterSheetError,
+            CharacterSheetRenderError,
+            OSError,
+        ) as exc:
             self._record_error(
                 title="保存エラー",
                 cause="編集内容を指定した保存先へ書き込めませんでした。",
@@ -526,7 +975,93 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, "別名で保存", default_name, "HTML Files (*.html)")
         return Path(path) if path else None
 
+    @staticmethod
+    def _advisory_warnings(sheet: CharacterSheet) -> list[str]:
+        data = sheet.data.get("data")
+        if not isinstance(data, dict):
+            return ["キャラクターデータを確認できません"]
+        warnings: list[str] = []
+        name = data.get("name")
+        if isinstance(name, str):
+            if name == "":
+                warnings.append("キャラクター名が空欄です")
+            if len(name) > 20:
+                warnings.append(
+                    f"キャラクター名が20文字を超えています（{len(name)}文字）"
+                )
+        profile = data.get("profile")
+        if isinstance(profile, dict):
+            for key, label in (
+                ("basicSettings", "基本設定"),
+                ("appearance", "外見"),
+                ("personality", "性格"),
+                ("speechStyle", "口調"),
+                ("background", "経歴"),
+                ("talentsAndRole", "特技と役割"),
+                ("otherFeatures", "その他の特徴"),
+            ):
+                value = profile.get(key)
+                if isinstance(value, str) and len(value) > 1000:
+                    warnings.append(
+                        f"{label}が1000文字を超えています（{len(value)}文字）"
+                    )
+        skills = data.get("skills")
+        if isinstance(skills, list):
+            for index, skill in enumerate(skills):
+                if not isinstance(skill, dict):
+                    continue
+                for key, label in (("name", "名前"), ("description", "説明")):
+                    value = skill.get(key)
+                    if isinstance(value, str) and len(value) > 1000:
+                        warnings.append(
+                            f"スキル{index + 1}の{label}が1000文字を超えています"
+                            f"（{len(value)}文字）"
+                        )
+        memories = data.get("memories")
+        if isinstance(memories, list):
+            memory_labels = {
+                "title": "タイトル",
+                "summary": "概要",
+                "location": "場所",
+                "intent": "意図",
+                "outcome": "結果",
+            }
+            for index, memory in enumerate(memories):
+                if not isinstance(memory, dict):
+                    continue
+                for key, label in memory_labels.items():
+                    value = memory.get(key)
+                    if isinstance(value, str) and len(value) > 1000:
+                        warnings.append(
+                            f"思い出{index + 1}の{label}が1000文字を超えています"
+                            f"（{len(value)}文字）"
+                        )
+        return warnings
+
+    def _confirm_advisory_warnings(self, warnings: list[str]) -> bool:
+        preview = "\n".join(f"・{warning}" for warning in warnings[:12])
+        if len(warnings) > 12:
+            preview += f"\n・ほか{len(warnings) - 12}件"
+        result = QMessageBox.warning(
+            self,
+            "保存前の警告",
+            preview
+            + "\n\n文字数超過によるバグを起こす可能性があります。"
+            "このまま別名で保存しますか？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return result == QMessageBox.StandardButton.Yes
+
     def reset_edits(self) -> None:
+        if self.sheet is not None:
+            self.character_draft = CharacterSheetDraft.from_sheet(self.sheet)
+            self.character_details_editor.set_sheet(
+                self.sheet,
+                self.character_draft,
+            )
+            self.status_editor.set_sheet(self.sheet, self.character_draft)
+            self.memory_editor.set_sheet(self.sheet, self.character_draft)
         for widget in self.skill_widgets:
             widget.reset()
         self.personality_editor.reset()
@@ -571,7 +1106,7 @@ class MainWindow(QMainWindow):
         return LeaveChoice.CANCEL
 
     def _render_current_edits(self) -> bytes:
-        if self.sheet is None:
+        if self.sheet is None or self.character_draft is None:
             raise SheetEditError("sheet is not loaded")
         states = [widget.state() for widget in self.skill_widgets]
         has_deletion = any(state.changed and state.deletion_requested for state in states)
@@ -579,7 +1114,10 @@ class MainWindow(QMainWindow):
         if has_deletion and has_creation:
             raise SheetEditError("skill creation and deletion cannot be saved in the same operation")
 
-        current = self.sheet.raw_html
+        try:
+            current = render_character_sheet(self.sheet, self.character_draft)
+        except CharacterSheetRenderError as exc:
+            raise SheetEditError(str(exc)) from exc
         for state in states:
             if not state.changed or state.deletion_requested or state.vacant_creation:
                 continue
@@ -660,6 +1198,11 @@ class MainWindow(QMainWindow):
             self.editor_stack.addWidget(widget)
 
     def _recalculate_changes(self) -> None:
+        if self.sheet is not None:
+            current_name = self.character_details_editor.current_name()
+            self.character_label.setText(
+                current_name or "名称未設定のキャラクター"
+            )
         changed: set[int] = set()
         states = [widget.state() for widget in self.skill_widgets]
         has_deletion = any(state.changed and state.deletion_requested for state in states)
@@ -709,6 +1252,14 @@ class MainWindow(QMainWindow):
                 "後ろの枠を使う場合は、手前の枠から連続して選択してください。"
             )
         assigned_personality_ids = [keyword_id for keyword_id in personality_ids if keyword_id is not None]
+        personality_names = [
+            self.personality_editor.catalog_by_id[keyword_id].name
+            for keyword_id in assigned_personality_ids
+            if keyword_id in self.personality_editor.catalog_by_id
+        ]
+        self.character_details_editor.set_personality_keywords(
+            personality_names
+        )
         if len(assigned_personality_ids) != len(set(assigned_personality_ids)):
             personality_validation_error = "同じ性格キーワードを複数の枠へ設定することはできません。"
         if self.personality_changed_indices and self.sheet is not None:
@@ -733,8 +1284,11 @@ class MainWindow(QMainWindow):
         self.editor_stack.setCurrentIndex(0 if index is None else index + 1)
 
     def _toggle_pane_focus(self) -> None:
-        if self.edit_tabs.currentIndex() == 1:
+        if self.edit_tabs.currentIndex() == self.personality_tab_index:
             self.personality_editor.focus_first_slot()
+            return
+        if self.edit_tabs.currentIndex() != self.skill_tab_index:
+            self.edit_tabs.currentWidget().setFocus()
             return
         if self.skill_list.hasFocus():
             index = self.skill_list.selected_skill_index()
@@ -746,7 +1300,7 @@ class MainWindow(QMainWindow):
     def _focus_personality_search(self) -> None:
         if self.sheet is None:
             return
-        self.edit_tabs.setCurrentIndex(1)
+        self.edit_tabs.setCurrentIndex(self.personality_tab_index)
         self.personality_editor.search_edit.setFocus()
 
     def _record_error(self, *, title: str, cause: str, impact: str, remedy: str, details: str) -> None:
@@ -830,19 +1384,26 @@ class MainWindow(QMainWindow):
         self.changed_count_label.setVisible(bool(self.sheet))
         self.changed_count_label.setText(f"変更 {self._change_count()}件")
 
-        can_save = bool(self.sheet and self._has_changes() and not self.sheet.read_only)
+        can_save = bool(
+            self.sheet
+            and not self.sheet.whole_sheet_read_only
+        )
         self.save_action.setEnabled(can_save)
         self.save_button.setEnabled(can_save)
+        can_export_markdown = self.sheet is not None
+        self.export_markdown_action.setEnabled(can_export_markdown)
+        self.export_markdown_button.setEnabled(can_export_markdown)
+        self.profile_comparison_action.setEnabled(self.sheet is not None)
         self.save_button.setProperty("role", "primary" if can_save else "secondary")
         refresh_widget_style(self.save_button)
         if self.sheet is None:
             save_tooltip = "HTMLファイルが未読込のため保存できません"
-        elif self.sheet.read_only:
+        elif self.sheet.whole_sheet_read_only:
             save_tooltip = f"読み取り専用のため保存できません: {self.sheet.read_only_reason}"
-        elif not self._has_changes():
-            save_tooltip = "変更がないため保存できません"
         elif self.validation_error is not None:
             save_tooltip = "保存前に、途中の空欄を修正してください"
+        elif not self._has_changes():
+            save_tooltip = "元のバイトを変更せず、新しいHTMLファイルへ保存します"
         else:
             save_tooltip = "編集内容を新しいHTMLファイルへ保存します"
         self.save_button.setToolTip(save_tooltip)
@@ -858,4 +1419,6 @@ class MainWindow(QMainWindow):
         self.open_button.setProperty("role", "primary" if self.sheet is None else "secondary")
         refresh_widget_style(self.open_button)
         suffix = " *" if self._has_changes() else ""
-        self.setWindowTitle(f"Saga & Seeker スキルエディター{suffix}")
+        self.setWindowTitle(
+            f"Saga & Seeker キャラクターシートエディター{suffix}"
+        )

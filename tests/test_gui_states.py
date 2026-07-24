@@ -104,7 +104,8 @@ def test_initial_and_comparison_based_change_states(tmp_path: Path) -> None:
     editor.name_edit.setText("Original")
     assert window.main_state == MainState.NORMAL
     assert window.changed_indices == set()
-    assert not window.save_button.isEnabled()
+    assert window.save_button.isEnabled()
+    assert "元のバイトを変更せず" in window.save_button.toolTip()
     assert window.skill_list.topLevelItem(0).text(window.skill_list.CHANGE_COLUMN) == "変更なし"
 
 
@@ -237,7 +238,7 @@ def test_vacant_slot_addition_saves_atomically_and_becomes_new_baseline(
     assert window.sheet.entries[1].skill["name"] == "Added"
     assert window.changed_indices == set()
     assert window.main_state == MainState.NORMAL
-    assert not window.save_button.isEnabled()
+    assert window.save_button.isEnabled()
 
 
 def test_structure_mismatch_is_normal_with_read_only_badge(tmp_path: Path) -> None:
@@ -259,8 +260,8 @@ def test_structure_mismatch_is_normal_with_read_only_badge(tmp_path: Path) -> No
     assert window.sheet is not None and window.sheet.read_only
     assert window.main_state == MainState.NORMAL
     assert not window.read_only_badge.isHidden()
-    assert not window.save_button.isEnabled()
-    assert "読み取り専用" in window.save_button.toolTip()
+    assert window.save_button.isEnabled()
+    assert "元のバイトを変更せず" in window.save_button.toolTip()
 
 
 def test_save_failure_stops_navigation_and_preserves_editor(

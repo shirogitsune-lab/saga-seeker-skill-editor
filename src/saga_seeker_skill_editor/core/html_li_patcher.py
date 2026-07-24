@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import html
+import json
 import re
 
-from saga_seeker_skill_editor.core.html_locator import LiSpan
+from saga_seeker_skill_editor.core.html_locator import LiSpan, StartTagSpan
 
 
 class LiPatchError(ValueError):
@@ -100,6 +101,120 @@ def build_vacant_skill_li() -> bytes:
     """Build the canonical attribute-free visual slot used by official sheets."""
 
     return b"<li>&nbsp;</li>"
+
+
+def build_patched_memory_li(
+    raw_html: bytes,
+    li: LiSpan,
+    *,
+    field: str,
+    value: str,
+) -> bytes:
+    """Patch one known memory attribute while retaining unknown attributes."""
+
+    return build_patched_memory_li_fields(
+        raw_html,
+        li,
+        replacements={field: value},
+    )
+
+
+def build_patched_memory_li_fields(
+    raw_html: bytes,
+    li: LiSpan,
+    *,
+    replacements: dict[str, str | list[str]],
+) -> bytes:
+    """Patch selected memory attributes while retaining every other byte."""
+
+    attr_names = {
+        "title": "data-memory-title",
+        "summary": "data-memory-summary",
+        "location": "data-memory-location",
+        "intent": "data-memory-intent",
+        "outcome": "data-memory-outcome",
+        "tags": "data-memory-tags",
+    }
+    start_tag = raw_html[li.start_tag_start : li.start_tag_end]
+    inner = raw_html[li.content_start : li.content_end]
+    end_tag = raw_html[li.content_end : li.end]
+    if b"<" in inner or b">" in inner:
+        raise LiPatchError("memory li has nested or complex HTML content")
+    patched_start = start_tag
+    for field, value in replacements.items():
+        attr_name = attr_names.get(field)
+        if attr_name is None:
+            raise LiPatchError(f"unsupported memory field: {field}")
+        if field == "tags":
+            if not isinstance(value, list) or not all(
+                isinstance(tag, str) for tag in value
+            ):
+                raise LiPatchError("memory tags must be a list of strings")
+            encoded_value = json.dumps(
+                value,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        elif isinstance(value, str):
+            encoded_value = value
+        else:
+            raise LiPatchError(f"memory field {field} must be a string")
+        patched_start = _replace_attr(
+            patched_start,
+            attr_name,
+            escape_attr_value(encoded_value),
+        )
+    title = replacements.get("title")
+    patched_inner = (
+        escape_text(title).encode("utf-8") if isinstance(title, str) else inner
+    )
+    return patched_start + patched_inner + end_tag
+
+
+def build_new_memory_li(memory: dict[str, object]) -> bytes:
+    """Build the canonical visual slot for a validated memory object."""
+
+    if memory.get("isPlaceholder") is True:
+        return b"<li>&nbsp;</li>"
+    string_fields = ("id", "title", "summary", "location", "intent", "outcome")
+    if any(not isinstance(memory.get(field), str) for field in string_fields):
+        raise LiPatchError("memory text fields must be strings")
+    tags = memory.get("tags")
+    if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
+        raise LiPatchError("memory tags must be a list of strings")
+    attrs = (
+        ("data-memory-id", memory["id"]),
+        ("data-memory-title", memory["title"]),
+        ("data-memory-summary", memory["summary"]),
+        ("data-memory-location", memory["location"]),
+        ("data-memory-intent", memory["intent"]),
+        ("data-memory-outcome", memory["outcome"]),
+        (
+            "data-memory-tags",
+            json.dumps(tags, ensure_ascii=False, separators=(",", ":")),
+        ),
+    )
+    start = "<li " + " ".join(
+        f'{name}="{escape_attr_value(value)}"' for name, value in attrs
+    ) + ">"
+    return (
+        start.encode("utf-8")
+        + escape_text(memory["title"]).encode("utf-8")
+        + b"</li>"
+    )
+
+
+def build_patched_start_tag_attr(
+    raw_html: bytes,
+    span: StartTagSpan,
+    *,
+    attr_name: str,
+    value: str,
+) -> bytes:
+    """Patch one double-quoted attribute while preserving the rest of the tag."""
+
+    start_tag = raw_html[span.start : span.end]
+    return _replace_attr(start_tag, attr_name, escape_attr_value(value))
 
 
 def _replace_attr(start_tag: bytes, attr_name: str, escaped_value: str) -> bytes:

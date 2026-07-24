@@ -83,7 +83,10 @@ def test_personality_tab_has_six_slots_and_browsable_catalog(tmp_path: Path) -> 
     window = _window(tmp_path, [1])
     editor = window.personality_editor
 
-    assert window.edit_tabs.tabText(1) == "性格キーワード"
+    assert (
+        window.edit_tabs.tabText(window.personality_tab_index)
+        == "性格キーワード"
+    )
     assert editor.slot_tree.topLevelItemCount() == 6
     first = editor.slot_tree.topLevelItem(0)
     assert first.text(editor.SLOT_NAME_COLUMN) == "勇敢"
@@ -121,7 +124,7 @@ def test_personality_change_and_revert_are_comparison_based(tmp_path: Path) -> N
     _assign(window, 0, 1)
     assert window.personality_changed_indices == set()
     assert window.main_state == MainState.NORMAL
-    assert not window.save_button.isEnabled()
+    assert window.save_button.isEnabled()
 
 
 def test_personality_gap_and_duplicate_errors_clear_after_correction(tmp_path: Path) -> None:
@@ -199,7 +202,7 @@ def test_find_shortcut_focuses_search_and_enter_assigns_first_match(tmp_path: Pa
     _app().processEvents()
     window.find_personality_action.trigger()
     _app().processEvents()
-    assert window.edit_tabs.currentIndex() == 1
+    assert window.edit_tabs.currentIndex() == window.personality_tab_index
     assert editor.search_edit.hasFocus()
 
     editor.search_edit.setText("論理")

@@ -15,6 +15,8 @@ if (Test-Path $VenvPython) {
 }
 $TestTemp = Join-Path $Root "work\tmp"
 New-Item -ItemType Directory -Force -Path $TestTemp | Out-Null
+$TestRunId = [Guid]::NewGuid().ToString("N")
+$PytestBaseTemp = Join-Path $TestTemp "pytest-build-$TestRunId"
 
 if (-not (Test-Path "assets\kanaria.ico")) {
     & $Python "scripts\convert_icon.py"
@@ -23,7 +25,7 @@ if (-not (Test-Path "assets\kanaria.ico")) {
 $env:PYTHONPATH = "src"
 $env:TMP = $TestTemp
 $env:TEMP = $TestTemp
-& $Python -m pytest -q --basetemp=work\pytest-tmp -o cache_dir=work\.pytest_cache
+& $Python -m pytest -q -p no:cacheprovider --basetemp=$PytestBaseTemp
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
@@ -31,10 +33,11 @@ if ($LASTEXITCODE -ne 0) {
 if ($Mode -eq "onedir") {
     $SpecPath = Join-Path $Root "work\pyinstaller-spec"
     $IconPath = Join-Path $Root "assets\kanaria.ico"
+    $AssetsPath = Join-Path $Root "assets"
     $StylesPath = Join-Path $Root "src\saga_seeker_skill_editor\gui\styles"
     $DataPath = Join-Path $Root "src\saga_seeker_skill_editor\data"
     New-Item -ItemType Directory -Force -Path $SpecPath | Out-Null
-    & $Python -m PyInstaller --clean --noconfirm --onedir --windowed --icon $IconPath --add-data "$IconPath;assets" --add-data "$StylesPath;saga_seeker_skill_editor/gui/styles" --add-data "$DataPath;saga_seeker_skill_editor/data" --specpath $SpecPath --name SagaSeekerSkillEditor "src\saga_seeker_skill_editor\main.py"
+    & $Python -m PyInstaller --clean --noconfirm --onedir --windowed --icon $IconPath --add-data "$AssetsPath;assets" --add-data "$StylesPath;saga_seeker_skill_editor/gui/styles" --add-data "$DataPath;saga_seeker_skill_editor/data" --specpath $SpecPath --name SagaSeekerSkillEditor "src\saga_seeker_skill_editor\main.py"
 } else {
     & $Python -m PyInstaller --clean --noconfirm SagaSeekerSkillEditor.spec
 }

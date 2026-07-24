@@ -232,7 +232,7 @@ def test_labeled_qt_icons_remain_available_in_all_theme_states(tmp_path: Path) -
     path = tmp_path / "sheet.html"
     path.write_bytes(_two_skill_sheet())
     assert window.load_path(path)
-    assert not window.save_button.isEnabled()
+    assert window.save_button.isEnabled()
     assert window.save_button.text() == "別名で保存"
     assert not window.save_button.icon().isNull()
 
@@ -247,7 +247,7 @@ def test_labeled_qt_icons_remain_available_in_all_theme_states(tmp_path: Path) -
         assert not window.reload_button.icon().isNull()
         assert not window.save_button.icon().isNull()
         assert window.save_button.text() == "別名で保存"
-        assert not window.save_button.isEnabled()
+        assert window.save_button.isEnabled()
 
     window.skill_widgets[1].name_edit.setText("Changed")
     assert window.save_button.isEnabled()

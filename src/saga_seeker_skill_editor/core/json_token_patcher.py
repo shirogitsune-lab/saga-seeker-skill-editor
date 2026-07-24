@@ -9,6 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from saga_seeker_skill_editor.core.script_safe_json import dumps_script_safe_string
+from saga_seeker_skill_editor.core.json_span import (
+    JsonSpanError,
+    find_object_key_value,
+)
 
 
 class JsonPatchError(ValueError):
@@ -30,6 +34,29 @@ def replace_string_fields_in_object(object_bytes: bytes, replacements: dict[str,
     for field, span in sorted(spans.items(), key=lambda item: item[1].start):
         chunks.append(object_bytes[cursor : span.start])
         chunks.append(dumps_script_safe_string(replacements[field]))
+        cursor = span.end
+    chunks.append(object_bytes[cursor:])
+    return b"".join(chunks)
+
+
+def replace_value_fields_in_object(
+    object_bytes: bytes,
+    replacements: dict[str, bytes],
+) -> bytes:
+    """Replace selected top-level JSON value tokens with pre-encoded safe tokens."""
+
+    spans: dict[str, TokenSpan] = {}
+    for field in replacements:
+        try:
+            span = find_object_key_value(object_bytes, field)
+        except JsonSpanError as exc:
+            raise JsonPatchError(str(exc)) from exc
+        spans[field] = TokenSpan(span.start, span.end)
+    chunks: list[bytes] = []
+    cursor = 0
+    for field, span in sorted(spans.items(), key=lambda item: item[1].start):
+        chunks.append(object_bytes[cursor : span.start])
+        chunks.append(replacements[field])
         cursor = span.end
     chunks.append(object_bytes[cursor:])
     return b"".join(chunks)

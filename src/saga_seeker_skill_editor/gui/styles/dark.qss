@@ -95,6 +95,18 @@ QPushButton[role="danger"] {
     border-color: @DANGER@;
     color: @DANGER_TEXT@;
 }
+QPushButton[accordion="true"] {
+    min-height: 40px;
+    padding: 6px 12px;
+    text-align: left;
+    font-size: 11pt;
+    font-weight: 600;
+}
+QPushButton[accordion="true"]:checked {
+    background: @SELECTION@;
+    border: @FOCUS_WIDTH@ solid @FOCUS@;
+    color: @SELECTION_TEXT@;
+}
 QPushButton[category="true"] {
     min-height: 38px;
     min-width: 76px;

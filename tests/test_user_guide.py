@@ -4,6 +4,7 @@ from hashlib import sha256
 from html.parser import HTMLParser
 import importlib.util
 from pathlib import Path
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,7 +74,12 @@ def _load_packaging_module():
     spec = importlib.util.spec_from_file_location("package_user_guide", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    scripts_path = str(path.parent)
+    sys.path.insert(0, scripts_path)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(scripts_path)
     return module
 
 
@@ -245,6 +251,59 @@ def test_packaging_failure_preserves_previous_distribution(
     assert _tree_hash(destination) == before
 
 
+def test_distribution_transaction_restores_both_entries_after_second_placement_fails(
+    tmp_path: Path,
+) -> None:
+    import os
+    import pytest
+
+    module_path = ROOT / "scripts" / "user_guide_artifacts.py"
+    spec = importlib.util.spec_from_file_location(
+        "transaction_user_guide_artifacts",
+        module_path,
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    html_name = "使い方.html"
+    assets_name = "user-guide-assets"
+    destination = tmp_path / "distribution"
+    old_assets = destination / assets_name
+    old_assets.mkdir(parents=True)
+    (destination / html_name).write_bytes(b"old-html")
+    (old_assets / "old.png").write_bytes(b"old-image")
+    before = _tree_hash(destination)
+
+    staged = tmp_path / "staged"
+    new_assets = staged / assets_name
+    new_assets.mkdir(parents=True)
+    (staged / html_name).write_bytes(b"new-html")
+    (new_assets / "new.png").write_bytes(b"new-image")
+    placements = 0
+
+    def fail_on_second_placement(source: Path, target: Path) -> None:
+        nonlocal placements
+        placements += 1
+        if placements == 2:
+            raise OSError("injected second placement failure")
+        os.replace(source, target)
+
+    with pytest.raises(module.GuideArtifactError):
+        module.publish_entries_atomically(
+            staged,
+            destination,
+            entry_names=(html_name, assets_name),
+            replace_operation=fail_on_second_placement,
+        )
+
+    assert placements == 2
+    assert _tree_hash(destination) == before
+    assert (destination / html_name).read_bytes() == b"old-html"
+    assert (destination / assets_name / "old.png").read_bytes() == b"old-image"
+    assert not (destination / assets_name / "new.png").exists()
+
+
 def test_screenshot_generator_does_not_forge_application_status_text() -> None:
     source = (ROOT / "scripts" / "generate_user_guide_screenshots.py").read_text(
         encoding="utf-8"
@@ -304,7 +363,12 @@ def test_failed_screenshot_generation_keeps_previous_complete_set(
     spec = importlib.util.spec_from_file_location("screenshot_generator", module_path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    scripts_path = str(module_path.parent)
+    sys.path.insert(0, scripts_path)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(scripts_path)
     published = tmp_path / "published"
     published.mkdir()
     (published / "old.txt").write_text("keep", encoding="utf-8")

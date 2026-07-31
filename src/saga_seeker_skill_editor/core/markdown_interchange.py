@@ -456,6 +456,10 @@ def _parse_legacy_markdown(
         legacy_format=True,
     )
     issues.extend(skill_issues)
+    memory_count = _legacy_memory_count(
+        _section_body(sections, "思い出"),
+        issues=issues,
+    )
 
     if _contains_empty_marker(_section_body(sections, "キャラクター名")):
         issues.append(
@@ -486,7 +490,7 @@ def _parse_legacy_markdown(
         skills=skills,
         issues=tuple(issues),
         format_kind=format_kind,
-        memory_count=_legacy_memory_count(_section_body(sections, "思い出")),
+        memory_count=memory_count,
     )
 
 
@@ -756,11 +760,29 @@ def _append_text_block(lines: list[str], value: str) -> None:
     lines.append(TEXT_END)
 
 
-def _legacy_memory_count(lines: Sequence[str]) -> int:
-    return sum(
+def _legacy_memory_count(
+    lines: Sequence[str],
+    *,
+    issues: list[MarkdownImportIssue],
+) -> int:
+    h3_count = sum(
         re.fullmatch(r"###\s+.+?\s*", line) is not None
         for line in lines
     )
+    bullet_count = sum(
+        re.fullmatch(r"\s*-\s+.+?\s*", line) is not None
+        for line in lines
+    )
+    if h3_count and bullet_count:
+        issues.append(
+            _error(
+                "ambiguous-legacy-memory-format",
+                "旧形式の思い出にH3形式と箇条書き形式が混在しているため"
+                "件数を一意に解釈できません",
+            )
+        )
+        return 0
+    return h3_count or bullet_count
 
 
 def create_character_sheet_from_markdown(

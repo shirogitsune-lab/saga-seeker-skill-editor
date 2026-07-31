@@ -547,6 +547,65 @@ def test_legacy_missing_information_is_warning_not_ambiguity_error() -> None:
     }.issubset(warning_codes)
 
 
+def test_legacy_memory_bullets_are_counted_but_never_restored() -> None:
+    plan = parse_character_markdown(
+        "## キャラクター名\n\n復元候補\n\n"
+        "## 思い出\n\n- 思い出タイトル1\n- 思い出タイトル2\n".encode(
+            "utf-8"
+        ),
+        catalog=load_personality_catalog(),
+        allow_legacy=True,
+    )
+
+    assert plan.can_create
+    assert plan.memory_count == 2
+    created = load_character_sheet(
+        create_character_sheet_from_markdown(
+            plan,
+            icon_webp=b"default-webp",
+            generation=_generation(),
+        )
+    )
+    assert created.data["data"]["memories"] == []
+
+
+@pytest.mark.parametrize(
+    ("body", "expected_count"),
+    (
+        ("## 思い出\n", 0),
+        ("## 思い出\n\n### 思い出A\n\n本文\n\n### 思い出B\n", 2),
+    ),
+)
+def test_legacy_memory_empty_and_h3_representations_remain_supported(
+    body: str,
+    expected_count: int,
+) -> None:
+    plan = parse_character_markdown(
+        body.encode("utf-8"),
+        catalog=load_personality_catalog(),
+        allow_legacy=True,
+    )
+
+    assert plan.can_create
+    assert plan.memory_count == expected_count
+
+
+def test_legacy_memory_mixed_bullet_and_h3_representations_are_blocking() -> None:
+    plan = parse_character_markdown(
+        "## 思い出\n\n### 思い出A\n\n本文\n\n- 思い出タイトルB\n".encode(
+            "utf-8"
+        ),
+        catalog=load_personality_catalog(),
+        allow_legacy=True,
+    )
+
+    assert not plan.can_create
+    assert any(
+        issue.code == "ambiguous-legacy-memory-format"
+        for issue in plan.issues
+    )
+
+
 @pytest.mark.parametrize(
     ("body", "code"),
     [

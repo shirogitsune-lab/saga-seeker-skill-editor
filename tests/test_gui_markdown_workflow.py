@@ -350,6 +350,21 @@ def test_markdown_preview_exposes_full_long_values_and_all_warnings() -> None:
     assert "スキル種別" in preview
 
 
+def test_legacy_memory_bullet_count_is_explicitly_not_restored_in_preview() -> None:
+    plan = parse_character_markdown(
+        "## 思い出\n\n- 思い出タイトル1\n- 思い出タイトル2\n".encode(
+            "utf-8"
+        ),
+        catalog=load_personality_catalog(),
+        allow_legacy=True,
+    )
+
+    preview = main_window_module.format_markdown_import_preview(plan)
+
+    assert "思い出: 2件検出" in preview
+    assert "取込結果: 復元されません" in preview
+
+
 def test_markdown_import_uses_a_scrollable_dedicated_preview_dialog() -> None:
     _app()
     dialog_type = getattr(main_window_module, "MarkdownImportPreviewDialog", None)

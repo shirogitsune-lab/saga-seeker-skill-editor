@@ -348,8 +348,9 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onefile
 ```
 
 `build.ps1` resolves Python 3.11+ in this order: explicit `-PythonPath`, local
-`.venv`, `py.exe` (3.13/3.12/3.11), then PATH `python`. It has no
-machine-specific installation path fallback.
+`.venv`, the Windows Python Launcher's default Python 3 (`py -3`), then PATH
+`python`. Every candidate is version-checked, there is no fixed upper version,
+and there is no machine-specific installation path fallback.
 
 - onedir output: `dist/SagaSeekerSkillEditor/`
 - onefile output: `dist/SagaSeekerSkillEditor.exe`

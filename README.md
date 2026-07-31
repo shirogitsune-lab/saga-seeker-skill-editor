@@ -172,8 +172,9 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onedir
 powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onefile
 ```
 
-ビルド用Pythonは、`-PythonPath`、リポジトリの`.venv`、Windowsの`py.exe`
-（3.13、3.12、3.11）、PATHの`python`の順でPython 3.11以上を探します。
+ビルド用Pythonは、`-PythonPath`、リポジトリの`.venv`、Windows Python
+Launcherの既定Python 3（`py -3`）、PATHの`python`の順で探し、見つかった
+Pythonが3.11以上であることを検証します。固定した上限はなく、3.14以降も対象です。
 明示指定する場合は、例えば
 `powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onedir -PythonPath C:\Python312\python.exe`
 と実行します。

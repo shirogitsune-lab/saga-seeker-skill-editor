@@ -56,15 +56,14 @@ function Resolve-BuildPython {
         }
     }
 
-    # 3. Windows py.exe launcher, newest supported interpreter first.
-    $Launcher = Get-Command py.exe -ErrorAction SilentlyContinue
+    # 3. Windows Python Launcher default Python 3. The launcher selects the
+    # newest registered Python 3; the candidate check enforces 3.11 or newer.
+    $Launcher = Get-Command py -ErrorAction SilentlyContinue
     if ($null -ne $Launcher) {
-        foreach ($Selector in @("-3.13", "-3.12", "-3.11")) {
-            $Tried.Add("$($Launcher.Source) $Selector")
-            $Candidate = Test-BuildPythonCandidate -Executable $Launcher.Source -PrefixArguments @($Selector) -Description "py.exe $Selector"
-            if ($null -ne $Candidate) {
-                return $Candidate
-            }
+        $Tried.Add("$($Launcher.Source) -3")
+        $Candidate = Test-BuildPythonCandidate -Executable $Launcher.Source -PrefixArguments @("-3") -Description "py -3"
+        if ($null -ne $Candidate) {
+            return $Candidate
         }
     }
 
@@ -78,5 +77,5 @@ function Resolve-BuildPython {
         }
     }
 
-    throw "Python 3.11 or newer was not found. Tried: $($Tried -join '; '). Configure -PythonPath, .venv, py.exe, or PATH."
+    throw "Python 3.11 or newer was not found. Tried: $($Tried -join '; '). Configure -PythonPath, .venv, py -3, or PATH."
 }

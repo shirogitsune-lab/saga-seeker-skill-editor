@@ -121,6 +121,74 @@ def _markdown_preview_value(value: str, *, limit: int = 80) -> str:
     return visible if len(visible) <= limit else visible[: limit - 1] + "…"
 
 
+def format_markdown_import_preview(plan: MarkdownImportPlan) -> str:
+    """Return the same detailed, user-facing summary shown before import."""
+
+    warning_lines = [
+        f"・{issue.message}"
+        for issue in plan.issues
+        if issue.severity == "warning"
+    ]
+    format_label = (
+        "AI向けMarkdown形式 v2"
+        if plan.format_kind is MarkdownFormatKind.CANONICAL_V2
+        else (
+            "旧形式（形式マーカー1）"
+            if plan.format_kind is MarkdownFormatKind.LEGACY_MARKED_V1
+            else "旧形式（形式マーカーなし）"
+        )
+    )
+    profile_lines = "\n".join(
+        f"  {label}: {_markdown_preview_value(plan.profile[key])}"
+        for key, label in (
+            ("basicSettings", "基本設定"),
+            ("appearance", "外見"),
+            ("personality", "性格"),
+            ("speechStyle", "口調"),
+            ("background", "経歴"),
+            ("talentsAndRole", "特技と役割"),
+            ("otherFeatures", "その他の特徴"),
+        )
+    )
+    status_lines = " / ".join(
+        f"{label}{plan.status[key]}"
+        for key, label in (
+            ("strength", "筋力"),
+            ("endurance", "耐久力"),
+            ("intelligence", "知力"),
+            ("mentalStrength", "精神力"),
+            ("agility", "素早さ"),
+            ("luck", "運"),
+        )
+    )
+    personality_names = "、".join(
+        item.name for item in plan.personalities
+    ) or "（なし）"
+    skill_lines = "\n".join(
+        f"  {index}. {_markdown_preview_value(skill.name)}"
+        f" — {_markdown_preview_value(skill.description)}"
+        for index, skill in enumerate(plan.skills, start=1)
+    ) or "  （なし）"
+    summary = (
+        "次の解析結果で新しいキャラクターシートを作成します。\n\n"
+        f"形式: {format_label}\n"
+        f"名前: {_markdown_preview_value(plan.name)}\n"
+        "プロフィール:\n"
+        f"{profile_lines}\n"
+        f"ステータス: {status_lines}\n"
+        f"性格キーワード: {personality_names}\n"
+        "スキル:\n"
+        f"{skill_lines}\n"
+        f"思い出: {plan.memory_count}件検出\n"
+        "取込結果: 復元されません\n\n"
+        "画像・内部IDも復元されません。"
+        "スキルはすべて新規オリジナルスキルになります。"
+    )
+    if warning_lines:
+        summary += "\n\n警告\n" + "\n".join(warning_lines[:20])
+    return summary
+
+
 class MainWindow(QMainWindow):
     def __init__(self, *, theme_manager: ThemeManager | None = None) -> None:
         super().__init__()
@@ -782,72 +850,11 @@ class MainWindow(QMainWindow):
         return box.clickedButton() is parse_button
 
     def _confirm_markdown_import(self, plan: MarkdownImportPlan) -> bool:
-        warning_lines = [
-            f"・{issue.message}"
-            for issue in plan.issues
-            if issue.severity == "warning"
-        ]
-        format_label = (
-            "AI向けMarkdown形式 v2"
-            if plan.format_kind is MarkdownFormatKind.CANONICAL_V2
-            else (
-                "旧形式（形式マーカー1）"
-                if plan.format_kind is MarkdownFormatKind.LEGACY_MARKED_V1
-                else "旧形式（形式マーカーなし）"
-            )
-        )
-        profile_lines = "\n".join(
-            f"  {label}: {_markdown_preview_value(plan.profile[key])}"
-            for key, label in (
-                ("basicSettings", "基本設定"),
-                ("appearance", "外見"),
-                ("personality", "性格"),
-                ("speechStyle", "口調"),
-                ("background", "経歴"),
-                ("talentsAndRole", "特技と役割"),
-                ("otherFeatures", "その他の特徴"),
-            )
-        )
-        status_lines = " / ".join(
-            f"{label}{plan.status[key]}"
-            for key, label in (
-                ("strength", "筋力"),
-                ("endurance", "耐久力"),
-                ("intelligence", "知力"),
-                ("mentalStrength", "精神力"),
-                ("agility", "素早さ"),
-                ("luck", "運"),
-            )
-        )
-        personality_names = "、".join(
-            item.name for item in plan.personalities
-        ) or "（なし）"
-        skill_lines = "\n".join(
-            f"  {index}. {_markdown_preview_value(skill.name)}"
-            f" — {_markdown_preview_value(skill.description)}"
-            for index, skill in enumerate(plan.skills, start=1)
-        ) or "  （なし）"
-        summary = (
-            "次の解析結果で新しいキャラクターシートを作成します。\n\n"
-            f"形式: {format_label}\n"
-            f"名前: {_markdown_preview_value(plan.name)}\n"
-            "プロフィール:\n"
-            f"{profile_lines}\n"
-            f"ステータス: {status_lines}\n"
-            f"性格キーワード: {personality_names}\n"
-            "スキル:\n"
-            f"{skill_lines}\n"
-            f"思い出: {plan.memory_count}件検出\n"
-            "取込結果: 復元されません\n\n"
-            "画像・内部IDも復元されません。"
-            "スキルはすべて新規オリジナルスキルになります。"
-        )
-        if warning_lines:
-            summary += "\n\n警告\n" + "\n".join(warning_lines[:20])
         result = QMessageBox.question(
             self,
             "Markdown取込プレビュー",
-            summary + "\n\nこの内容で新規作成しますか？",
+            format_markdown_import_preview(plan)
+            + "\n\nこの内容で新規作成しますか？",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )

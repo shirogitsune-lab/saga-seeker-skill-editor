@@ -22,6 +22,7 @@ work/
 
 # Local/private Saga & Seeker sheets
 *.html
+!docs/user-guide/index.html
 tests/private_fixtures/*
 !tests/private_fixtures/.gitkeep
 

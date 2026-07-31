@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Saga &amp; Seeker キャラクターシートエディター 使い方</title>
+  <style>
+    :root {
+      --page: #f5f5f0;
+      --panel: #ffffff;
+      --ink: #17212b;
+      --muted: #4d5a66;
+      --accent: #006f89;
+      --accent-dark: #004f63;
+      --line: #b7c1c9;
+      --soft: #e6f3f6;
+      --warning: #fff4d6;
+      --danger: #fff0f2;
+      --focus: #005fcc;
+      --radius: .75rem;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif;
+      font-size: 16px;
+      line-height: 1.75;
+    }
+    a { color: var(--accent-dark); text-underline-offset: .18em; }
+    a:hover { text-decoration-thickness: .16em; }
+    a:focus-visible, summary:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+      border-radius: .2rem;
+    }
+    .skip-link {
+      position: fixed;
+      inset: .5rem auto auto .5rem;
+      z-index: 10;
+      padding: .65rem 1rem;
+      background: var(--ink);
+      color: #fff;
+      transform: translateY(-160%);
+    }
+    .skip-link:focus { transform: translateY(0); }
+    header {
+      color: #fff;
+      background: linear-gradient(135deg, #173747, #006f89);
+      padding: 3.5rem 1.25rem 3rem;
+    }
+    header > div, main, footer > div {
+      width: min(72rem, calc(100% - 2rem));
+      margin-inline: auto;
+    }
+    .eyebrow { margin: 0 0 .35rem; font-weight: 700; letter-spacing: .06em; }
+    h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.25rem); line-height: 1.2; }
+    header p { max-width: 48rem; margin: 1rem 0 0; font-size: 1.1rem; }
+    .version {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: .25rem .65rem;
+      border: 1px solid rgba(255,255,255,.65);
+      border-radius: 999px;
+    }
+    main { padding: 1.5rem 0 4rem; }
+    nav, section, .card, figure, details {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+    nav { padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+    nav h2 { margin-top: 0; }
+    nav ol { columns: 2 18rem; padding-left: 1.3rem; }
+    section { margin-top: 1.5rem; padding: clamp(1.25rem, 3vw, 2rem); }
+    h2 { margin: 0 0 1rem; font-size: clamp(1.55rem, 3vw, 2rem); line-height: 1.3; }
+    h3 { margin: 2rem 0 .65rem; font-size: 1.25rem; line-height: 1.4; }
+    h4 { margin: 1.25rem 0 .4rem; font-size: 1.05rem; }
+    p, ul, ol { max-width: 52rem; }
+    .lead { font-size: 1.1rem; }
+    .steps { counter-reset: guide-step; display: grid; gap: 1rem; }
+    .step {
+      counter-increment: guide-step;
+      padding: 1rem 1.1rem;
+      background: #f8fafb;
+      border-left: .35rem solid var(--accent);
+      border-radius: .3rem;
+    }
+    .step::before {
+      content: counter(guide-step);
+      display: inline-grid;
+      place-items: center;
+      width: 2rem;
+      height: 2rem;
+      margin-right: .55rem;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+    }
+    .note, .warning, .limit {
+      margin: 1rem 0;
+      padding: 1rem 1.1rem;
+      border-radius: .4rem;
+      max-width: 52rem;
+    }
+    .note { background: var(--soft); border-left: .35rem solid var(--accent); }
+    .warning { background: var(--warning); border-left: .35rem solid #9a6700; }
+    .limit { background: var(--danger); border-left: .35rem solid #a32135; }
+    figure { margin: 1.25rem 0 2rem; padding: .75rem; overflow: hidden; }
+    figure img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border: 1px solid #7b8994;
+      border-radius: .4rem;
+      background: #e7ebef;
+    }
+    figcaption { padding: .7rem .25rem 0; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .card { padding: 1rem; }
+    .card h3 { margin-top: 0; }
+    .gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .gallery figure { margin: 0; }
+    kbd {
+      padding: .12rem .35rem;
+      border: 1px solid #8c99a3;
+      border-bottom-width: 2px;
+      border-radius: .25rem;
+      background: #f7f9fa;
+      font-family: inherit;
+    }
+    code { overflow-wrap: anywhere; }
+    details { margin-top: .75rem; padding: .8rem 1rem; }
+    summary { cursor: pointer; font-weight: 700; }
+    footer { background: #17212b; color: #fff; padding: 2rem 1rem; }
+    footer p { margin: 0; }
+    @media (max-width: 48rem) {
+      .grid, .gallery { grid-template-columns: 1fr; }
+      nav ol { columns: 1; }
+      section { border-radius: .45rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+    @media print {
+      body { background: #fff; color: #000; font-size: 11pt; }
+      header { background: #fff; color: #000; padding: 1rem 0; }
+      nav, section, figure, .card, details { break-inside: avoid; box-shadow: none; }
+      .skip-link { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+  <header>
+    <div>
+      <p class="eyebrow">非エンジニア向け・オフライン利用ガイド</p>
+      <h1>Saga &amp; Seeker<br>キャラクターシートエディター</h1>
+      <p>既存のキャラクターシートを壊さずに確認・編集し、別名で保存するための手順です。AIとの受け渡しに使うMarkdown機能も説明します。</p>
+      <span class="version">アプリケーションバージョン 2.0.0</span>
+    </div>
+  </header>
+
+  <main id="main">
+    <nav aria-labelledby="toc-heading">
+      <h2 id="toc-heading">このガイドの内容</h2>
+      <ol>
+        <li><a href="#quick-start">最初の3手順</a></li>
+        <li><a href="#open">HTMLを開く・新規作成</a></li>
+        <li><a href="#edit">各項目を編集する</a></li>
+        <li><a href="#markdown">AI向けMarkdown形式 v2</a></li>
+        <li><a href="#readonly">読み取り専用とエラー</a></li>
+        <li><a href="#save">別名で保存する</a></li>
+        <li><a href="#security">安全上の注意</a></li>
+        <li><a href="#faq">困ったとき</a></li>
+      </ol>
+    </nav>
+
+    <section id="quick-start" aria-labelledby="quick-heading">
+      <h2 id="quick-heading">最初の3手順</h2>
+      <div class="steps">
+        <div class="step"><strong>アプリを起動</strong>し、「HTMLファイルを開く」または「新規作成」を選びます。</div>
+        <div class="step"><strong>タブを切り替えて編集</strong>します。画面下の「変更」件数で未保存の変更を確認できます。</div>
+        <div class="step"><strong>「別名で保存」</strong>します。読み込んだ元のHTMLへ自動で上書きしません。</div>
+      </div>
+      <figure>
+        <img src="user-guide-assets/01-start-screen.png" width="1440" height="900" alt="起動画面。HTMLを開く、新規作成、Markdownから新規作成のボタンがある">
+        <figcaption>起動画面。実在データを使わない匿名合成画面です。</figcaption>
+      </figure>
+    </section>
+
+    <section id="open" aria-labelledby="open-heading">
+      <h2 id="open-heading">HTMLを開く・新規作成</h2>
+      <h3>既存のキャラクターシートを開く</h3>
+      <ol>
+        <li>「HTMLファイルを開く」を押します。</li>
+        <li>ゲームから出力したキャラクターシートのHTMLを選びます。</li>
+        <li>キャラクター名とスキル欄の概要を確認します。</li>
+      </ol>
+      <p class="note">ファイル選択ダイアログはWindows環境によって見た目が変わるため、ガイド画像には含めていません。</p>
+      <figure>
+        <img src="user-guide-assets/02-loaded-sheet.png" width="1440" height="900" loading="lazy" alt="匿名サンプルを読み込んだ編集画面">
+        <figcaption>読込済み画面。上部に対象とスキル欄の概要、中央に編集タブ、下部に状態が表示されます。</figcaption>
+      </figure>
+      <h3>新規作成</h3>
+      <p>「新規作成」は空のキャラクターシートを作ります。名前、プロフィール、ステータス、スキル、性格キーワード、思い出を入力してから別名で保存してください。</p>
+    </section>
+
+    <section id="edit" aria-labelledby="edit-heading">
+      <h2 id="edit-heading">各項目を編集する</h2>
+      <p class="lead">「基本情報」「ステータス」「スキル」「性格キーワード」「思い出」のタブを切り替えます。</p>
+
+      <h3>基本情報とプロフィール</h3>
+      <p>キャラクター名は1行で入力します。プロフィール7項目は複数行を使えます。長い項目は見出しを押して展開・折り畳みできます。</p>
+      <figure>
+        <img src="user-guide-assets/03-basic-information.png" width="1440" height="900" loading="lazy" alt="基本情報タブで名前とプロフィールを編集する画面">
+        <figcaption>基本情報。プロフィールの改行は保存後のHTMLにも意味のある改行として反映されます。</figcaption>
+      </figure>
+
+      <h3>プロフィールを比較する</h3>
+      <p>「プロフィール比較を表示」を押すと、2項目と性格キーワードを横に並べられます。別ウィンドウ表示も選べます。</p>
+      <figure>
+        <img src="user-guide-assets/04-profile-comparison.png" width="1440" height="900" loading="lazy" alt="2つのプロフィール項目を並べた比較画面">
+        <figcaption>比較は入力を整理する補助表示です。同じ編集内容を別の見方で表示します。</figcaption>
+      </figure>
+
+      <h3>スキル</h3>
+      <p>左の一覧からスキルを1つ選び、右で名前と説明を編集します。スキル名は1行、説明は複数行です。保護中のスキルは確認操作なしに置き換えません。</p>
+      <figure>
+        <img src="user-guide-assets/05-skills.png" width="1440" height="900" loading="lazy" alt="スキル一覧と選択したスキルの編集欄">
+        <figcaption>スキル一覧には、種類、保護状態、変更の有無が表示されます。</figcaption>
+      </figure>
+
+      <h3>性格キーワード</h3>
+      <p>設定枠を選び、名前の部分一致または分類からキーワードを探します。カタログにない文字列を自由入力する機能ではありません。</p>
+      <figure>
+        <img src="user-guide-assets/06-personality-keywords.png" width="1440" height="900" loading="lazy" alt="性格キーワードの設定枠と検索結果">
+        <figcaption>同じキーワードの重複や不正な並びを避けながら設定します。</figcaption>
+      </figure>
+
+      <h3>思い出</h3>
+      <p>思い出の追加、順序変更、空白保持枠への置換を行えます。文章項目は複数行を使えます。</p>
+      <figure>
+        <img src="user-guide-assets/07-memories.png" width="1440" height="900" loading="lazy" alt="思い出の一覧と文章項目の編集画面">
+        <figcaption>Markdownからの新規作成とは制限が異なります。HTMLを直接編集するときは思い出を編集できます。</figcaption>
+      </figure>
+    </section>
+
+    <section id="markdown" aria-labelledby="markdown-heading">
+      <h2 id="markdown-heading">AI向けMarkdown形式 v2</h2>
+      <p>AIへ内容を渡す中間形式の番号は「AI向けMarkdown形式 v2」です。アプリケーションバージョン 2.0.0とは別の番号です。</p>
+      <div class="grid">
+        <div class="card">
+          <h3>Markdownを書き出す</h3>
+          <p>開いているシートの基本項目、ステータス、性格キーワード、スキル、AI参照用の思い出を書き出します。画像と内部IDは含みません。</p>
+        </div>
+        <div class="card">
+          <h3>Markdownから新規作成</h3>
+          <p>形式を検査し、詳細プレビューで内容を確認した後、新しいシートを作ります。現在開いているHTMLを直接書き換えません。</p>
+        </div>
+      </div>
+      <figure>
+        <img src="user-guide-assets/08-markdown-import-preview.png" width="1440" height="900" loading="lazy" alt="AI向けMarkdown形式 v2の取込プレビュー。思い出は検出するが復元しないと表示される">
+        <figcaption>取込プレビューで形式、名前、各項目、警告、復元されない情報を確認します。</figcaption>
+      </figure>
+      <p class="limit"><strong>重要:</strong> 思い出は件数と構造を検出しますが、Markdownから新規作成したシートへは復元されません。画像と内部IDも復元されず、スキルは新しいオリジナルスキルになります。</p>
+      <h3>旧形式Markdown</h3>
+      <p>マーカーなしを含む旧形式を検出した場合、内容を先に解析しません。「旧形式として解析する」を明示した後にだけ詳細プレビューへ進みます。欠落項目は警告になり、解釈が一意でない構造はエラーになります。</p>
+    </section>
+
+    <section id="readonly" aria-labelledby="readonly-heading">
+      <h2 id="readonly-heading">読み取り専用とエラー</h2>
+      <p>HTML内の表示とデータが安全に対応付けられないときは、推測して保存せず、内容を読み取り専用で表示します。</p>
+      <figure>
+        <img src="user-guide-assets/09-read-only.png" width="1440" height="900" loading="lazy" alt="読み取り専用バッジと理由が表示された画面">
+        <figcaption>読み取り専用は内容を失った状態ではありません。安全な更新を停止した状態です。</figcaption>
+      </figure>
+      <ul>
+        <li>元のゲームからHTMLをもう一度出力して試します。</li>
+        <li>エラー画面の「原因」「影響」「対処」を確認します。</li>
+        <li>元ファイルを手作業で直す前に、別の場所へコピーを残します。</li>
+      </ul>
+    </section>
+
+    <section id="save" aria-labelledby="save-heading">
+      <h2 id="save-heading">別名で保存する</h2>
+      <ol>
+        <li>画面下のエラーがなく、変更件数が意図どおりか確認します。</li>
+        <li>「別名で保存」を押します。</li>
+        <li>元HTMLとは別のファイル名を選びます。</li>
+        <li>保存完了表示を確認します。</li>
+      </ol>
+      <figure>
+        <img src="user-guide-assets/10-save-complete.png" width="1440" height="900" loading="lazy" alt="別名での保存が完了した状態">
+        <figcaption>保存後は新しいファイルが比較の基準になります。</figcaption>
+      </figure>
+      <p class="warning">大切なシートは、ゲームで読み込めることを確認するまで元HTMLを残してください。</p>
+    </section>
+
+    <section id="security" aria-labelledby="security-heading">
+      <h2 id="security-heading">安全上の注意</h2>
+      <h3>Windows SmartScreenが表示された場合</h3>
+      <p>配布元とファイル名が案内どおりか確認してください。不明な入手元の実行ファイルは開かないでください。このガイドは個人端末のSmartScreen実画面を掲載せず、文章で説明しています。</p>
+      <div class="note" role="note">
+        <strong>確認の流れ:</strong>
+        配布元を確認 → ウイルス対策ソフトで検査 → 信頼できる配布物だけを起動。
+        判断できない場合は中止してください。
+      </div>
+      <h3>AIへ渡す前に</h3>
+      <p>Markdownにはプロフィールや思い出の文章が含まれます。個人情報や共有したくない設定がないか、テキストエディターで確認してください。</p>
+    </section>
+
+    <section id="faq" aria-labelledby="faq-heading">
+      <h2 id="faq-heading">困ったとき</h2>
+      <details>
+        <summary>保存ボタンを押せません</summary>
+        <p>読み取り専用、入力エラー、スキル置換の未確認がないか、画面下の状態表示を確認してください。</p>
+      </details>
+      <details>
+        <summary>プロフィールの改行が消えました</summary>
+        <p>アプリケーションバージョン 2.0.0の修正版では、プロフィールHTMLの <code>&lt;br&gt;</code> を意味のある改行として扱います。古い実行ファイルを起動していないか確認してください。</p>
+      </details>
+      <details>
+        <summary>Markdownで編集した思い出が戻りません</summary>
+        <p>仕様です。AI向けMarkdown形式 v2の思い出はAI参照用で、Markdownから新規作成しても復元されません。</p>
+      </details>
+      <details>
+        <summary>画面が見づらいです</summary>
+        <p>メニューの「表示」→「外観」から、ライト、ダーク、ハイコントラストを選べます。</p>
+      </details>
+    </section>
+
+    <section id="gallery" aria-labelledby="gallery-heading">
+      <h2 id="gallery-heading">補助画面ギャラリー</h2>
+      <p>次の10状態も正式画像として再生成・監査しています。通常の手順では必要な場面だけ参照してください。</p>
+      <div class="gallery">
+        <figure><img src="user-guide-assets/11-multiple-profiles.png" width="1440" height="900" loading="lazy" alt="複数のプロフィール編集欄を展開した画面"><figcaption>複数プロフィール展開</figcaption></figure>
+        <figure><img src="user-guide-assets/12-comparison-window.png" width="1440" height="900" loading="lazy" alt="プロフィール比較を別ウィンドウで開いた画面"><figcaption>比較別ウィンドウ</figcaption></figure>
+        <figure><img src="user-guide-assets/13-vacant-skill.png" width="1440" height="900" loading="lazy" alt="未使用のスキル枠へ追加する画面"><figcaption>未使用枠追加</figcaption></figure>
+        <figure><img src="user-guide-assets/14-image-change.png" width="1440" height="900" loading="lazy" alt="キャラクター画像のプレビューと差し替えボタン"><figcaption>画像変更</figcaption></figure>
+        <figure><img src="user-guide-assets/15-markdown-export.png" width="1440" height="900" loading="lazy" alt="AI向けMarkdown形式 v2の書出し完了画面"><figcaption>Markdown書出し</figcaption></figure>
+        <figure><img src="user-guide-assets/16-input-error.png" width="1440" height="900" loading="lazy" alt="単一行項目に改行がある入力エラー画面"><figcaption>入力エラー</figcaption></figure>
+        <figure><img src="user-guide-assets/17-light-theme.png" width="1440" height="900" loading="lazy" alt="ライトテーマの編集画面"><figcaption>ライト</figcaption></figure>
+        <figure><img src="user-guide-assets/18-dark-theme.png" width="1440" height="900" loading="lazy" alt="ダークテーマの編集画面"><figcaption>ダーク</figcaption></figure>
+        <figure><img src="user-guide-assets/19-high-contrast-theme.png" width="1440" height="900" loading="lazy" alt="ハイコントラストテーマの編集画面"><figcaption>ハイコントラスト</figcaption></figure>
+        <figure><img src="user-guide-assets/20-status-edit.png" width="1440" height="900" loading="lazy" alt="ステータスのランクを編集する画面"><figcaption>ステータス編集</figcaption></figure>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div>
+      <p>Saga &amp; Seeker キャラクターシートエディター — オフライン利用ガイド</p>
+    </div>
+  </footer>
+</body>
+</html>

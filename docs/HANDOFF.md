@@ -142,6 +142,20 @@ See:
 - [ADR 0008: Add lossy Markdown interchange and shared profile comparison](adr/0008-add-lossy-markdown-interchange-and-profile-comparison.md)
 - [ADR 0009: Treat profile `<br>` as semantic newlines](adr/0009-treat-profile-br-as-semantic-newlines.md)
 - [ADR 0010: Define AI-oriented Markdown format v2](adr/0010-define-ai-markdown-format-v2.md)
+- [ADR 0011: Package an offline HTML user guide](adr/0011-package-an-offline-html-user-guide.md)
+
+### Offline User Guide
+
+- Canonical source: `docs/user-guide/index.html`
+- Formal images: `docs/user-guide/user-guide-assets/*.png` (exactly 20)
+- Regeneration procedure: `docs/user-guide/SCREENSHOT_WORKFLOW.md`
+- Actual visual anonymity audit: `docs/user-guide/SCREENSHOT_AUDIT.md`
+- Distribution copy: byte-identical `使い方.html` plus `user-guide-assets/`
+- Automated `offscreen` inspection and formal Windows Qt capture are separate.
+- Formal images use anonymous synthetic dataset `ANON-GUIDE-001`, a fixed
+  1440×900 widget capture, Windows normal Qt, 100% scale, and Fusion style.
+- `scripts/package_user_guide.py` removes stale destination guide images and
+  produces idempotent copies. `build.ps1` invokes it after both build modes.
 
 ## v2.0.0 Character-Sheet Editing
 
@@ -329,6 +343,7 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onefile
 
 - onedir output: `dist/SagaSeekerSkillEditor/`
 - onefile output: `dist/SagaSeekerSkillEditor.exe`
+- Both outputs include byte-identical `使い方.html` and `user-guide-assets/`.
 - `Pillow` is used only to convert the icon before packaging and is excluded from the onefile bundle.
 - QSS, the icon, and the personality catalog must work in source, onedir, and onefile execution.
 - Release assets should include a versioned onefile EXE, a versioned onedir ZIP, and `SHA256SUMS.txt`.
@@ -357,9 +372,9 @@ The game-derived names and classification data in `data/personality_keywords.csv
 ## Current Maintenance State
 
 - The public v2.0.0 feature and profile comparison are the repair baseline.
-  Local stacked repair branches add profile `<br>` compatibility and
-  AI-oriented Markdown format v2. Packaging and guide work follow on the next
-  stacked branch.
+  Three local stacked repair branches add profile `<br>` compatibility,
+  AI-oriented Markdown format v2, and the packaged offline HTML guide.
+  They have not been pushed, merged, tagged, or released.
 - Use GitHub Issues for the next feature request or defect before substantial implementation.
 - `core/invariant_segments.py` exists, but the production save path does not currently call it. Byte preservation is provided by targeted replacements and focused tests. Before claiming universal runtime invariant-segment validation, either integrate the helper into the render/save path with tests or narrow the README statement.
 - The release announcement presented v1.2.0 as the first advertised update after v1.0.0; v1.1.0 existed publicly but was not separately advertised.

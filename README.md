@@ -19,6 +19,11 @@ Saga & SeekerのキャラクターシートHTMLを新規作成し、基本情報
 
 このアプリケーションはローカルファイルだけを処理し、ネットワーク通信を行いません。
 
+配布物にはオフラインで読める`使い方.html`と`user-guide-assets/`が含まれます。
+リポジトリ上の正本は
+[docs/user-guide/index.html](docs/user-guide/index.html)です。HTML本文と画像だけで
+完結し、CDN、Webフォント、JavaScript、外部画像を使用しません。
+
 ## 画面と操作
 
 PySide6による5タブ構成の画面です。
@@ -172,6 +177,12 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onefile
 元のWebPアイコンは`assets/カナリア.webp`にあります。パッケージ作成前に`scripts/convert_icon.py`を実行すると、`assets/kanaria.ico`を生成します。
 
 `SagaSeekerSkillEditor.spec`はEXEアイコンを設定し、onefile版へ`gui/styles/*.qss`、性格キーワードカタログ、新規シート用の既定WebP画像を同梱します。ビルドスクリプトはonedir版にも同じリソースを含めます。PyInstallerのonefile実行時に使用される`_MEIPASS`を含め、リソースパスの解決は一か所へ集約しています。
+
+ビルドスクリプトは成功後、正本HTMLを本文変更なしで`使い方.html`へコピーし、
+20枚の正式画像を`user-guide-assets/`へコピーします。onedirでは実行ファイルと
+同じディレクトリ、onefileでは`dist/`直下が配布先です。正式画像の再生成条件と
+匿名性監査は`docs/user-guide/SCREENSHOT_WORKFLOW.md`および
+`docs/user-guide/SCREENSHOT_AUDIT.md`に記録しています。
 
 両形式の画像プラグイン回帰は次で確認できます。
 

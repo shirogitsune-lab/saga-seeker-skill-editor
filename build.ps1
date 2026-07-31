@@ -44,3 +44,13 @@ if ($Mode -eq "onedir") {
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
+
+if ($Mode -eq "onedir") {
+    $GuideDestination = Join-Path $Root "dist\SagaSeekerSkillEditor"
+} else {
+    $GuideDestination = Join-Path $Root "dist"
+}
+& $Python "scripts\package_user_guide.py" $GuideDestination
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}

@@ -313,21 +313,29 @@ Public suite:
 uv run pytest -q --basetemp=work\pytest-handoff -o cache_dir=work\.pytest-handoff-cache
 ```
 
-The most recent local repair verification recorded:
+The most recent remediation verification recorded:
 
-- Public run without private fixtures: `210 passed, 5 skipped`.
-- Configured private real-sheet integration: `5 passed`; the anonymous corpus
-  summary loaded all 150 valid character-sheet scripts and rejected the one
-  HTML without a character-sheet JSON script.
-- Read-only parsing of all 163 existing standalone-converter Markdown outputs
-  accepted 161 as new-sheet candidates after explicit legacy permission. Two
-  were intentionally blocked: one
-  exceeded the six-skill limit and one repeated a recognized profile heading.
-- onefile and onedir builds completed.
+- Public run without private fixtures: `250 passed, 5 skipped`.
+- Focused Markdown interchange and GUI workflow run: `60 passed`.
+- Focused user-guide and build-Python resolution run: `19 passed`.
+- Configured private real-sheet integration: `5 passed`; no private path,
+  filename, sheet content, or character identifier was recorded.
+- Read-only parsing of the 162 standalone-converter Markdown outputs currently
+  present classified all 162 as `LEGACY_UNMARKED` and refused all 162 before
+  explicit legacy permission. After permission, 159 were valid new-sheet
+  candidates and 3 were intentionally blocked by ambiguity or validation
+  errors. The preview detected 70 memory entries across 15 files, while import
+  still restored no memories. Source hashes were unchanged and no parse
+  exception occurred.
+- onefile and onedir builds completed after each build's internal public test
+  run also reported `250 passed, 5 skipped`.
 - Both executable forms passed PNG/JPEG decode, square crop, WebP encode, WebP
   reload, and packaged default-WebP resolution.
 - Both executable forms launched successfully with light, dark, and
   high-contrast themes.
+- The 20 formal guide screenshots were not regenerated because this remediation
+  did not change their UI states or pixels; the existing screenshot audit and
+  guide validation remain applicable.
 
 Pytest's default Windows temp or cache directory may be inaccessible on some machines. Keep `--basetemp` and `cache_dir` under ignored `work/`, or use `build.ps1`, which already does this.
 

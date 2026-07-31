@@ -6,18 +6,18 @@ Read `AGENTS.md` and `CONTEXT.md` first, then inspect the ADRs linked below.
 ## Baseline
 
 - Product: Saga & Seeker Skill Editor
-- Application version: `2.0.0` (implemented locally; not committed or released)
-- Public release: `v1.2.0`
-- Release tag commit: `8dd3fb4c0ab300b58d8558871a0d39b6eadc4328`
+- Application version: `2.0.0`
+- Public release: `v2.0.0`
+- Release tag commit: `87387cbece195911554473d7db3b71556862c2a5`
 - Repository: `https://github.com/shirogitsune-lab/saga-seeker-skill-editor`
 - Default branch: `main`
 - License: MIT for the source code, bundled canary artwork, and distributions
 - Platform: Windows 10/11 desktop
 - Runtime: Python 3.11+ and PySide6; packaged users do not need Python
 
-The local worktree now contains the accepted `v2.0.0` implementation on top of
-the public `v1.2.0` baseline. No commit, push, tag, GitHub issue, or release has
-been created.
+The public `v2.0.0` tag is the baseline for the current local repair branches.
+The repairs are local stacked branches; they have not been pushed, merged,
+tagged, or released.
 
 ## Product Purpose
 
@@ -85,14 +85,21 @@ The original input file is not an in-place editing target. Safety and preservati
 
 ### Markdown Interchange
 
+- Writes canonical AI-oriented Markdown format v2. Application version
+  `2.0.0` and format version `2` are separate identifiers.
 - Exports the current rendered draft in-process; it does not launch or depend
   on the standalone Rust converter executable.
 - Preserves the standalone converter's important semantic output, including
   descriptions for valid skills whose internal type is empty.
 - Adds all normal memories, including JSON-only positions seven onward, to the
   AI-oriented export. Placeholder memories and internal IDs are omitted.
-- Imports only fixed known headings from UTF-8 Markdown up to 8 MiB and never
-  interprets embedded HTML.
+- Uses fixed H1–H4 structure and opaque text blocks, so headings, bullets, and
+  empty-marker-looking text inside free prose cannot alter document structure.
+- Lexically distinguishes canonical v2, marked v1, unmarked legacy, invalid
+  marker position, unknown version, duplicate, mixed, and malformed blocks.
+- Requires explicit `旧形式として解析する` consent before interpreting marked
+  v1 or unmarked legacy content.
+- Imports UTF-8 Markdown up to 8 MiB and never interprets embedded HTML.
 - Creates a new sheet with the default icon, `charm == "E"`, no memories, and
   newly generated identity/timestamp metadata.
 - Creates imported skills as new original skills with sequential `skN` IDs and
@@ -102,6 +109,7 @@ The original input file is not an in-place editing target. Safety and preservati
 - Shows a preview and warnings before replacement. Parse errors, validation
   errors, preview cancellation, and generation failure retain the current
   sheet and draft.
+- Reports detected memories separately and never restores them.
 
 ## Safety Contract
 
@@ -132,6 +140,8 @@ See:
 - [ADR 0006: Separate public and private fixtures](adr/0006-separate-public-and-private-fixtures.md)
 - [ADR 0007: Define the v2 character-sheet contract](adr/0007-define-the-v2-character-sheet-contract.md)
 - [ADR 0008: Add lossy Markdown interchange and shared profile comparison](adr/0008-add-lossy-markdown-interchange-and-profile-comparison.md)
+- [ADR 0009: Treat profile `<br>` as semantic newlines](adr/0009-treat-profile-br-as-semantic-newlines.md)
+- [ADR 0010: Define AI-oriented Markdown format v2](adr/0010-define-ai-markdown-format-v2.md)
 
 ## v2.0.0 Character-Sheet Editing
 
@@ -283,14 +293,15 @@ Public suite:
 uv run pytest -q --basetemp=work\pytest-handoff -o cache_dir=work\.pytest-handoff-cache
 ```
 
-The most recent local v2 verification recorded:
+The most recent local repair verification recorded:
 
-- Public run without private fixtures: `172 passed, 5 skipped`.
+- Public run without private fixtures: `210 passed, 5 skipped`.
 - Configured private real-sheet integration: `5 passed`; the anonymous corpus
   summary loaded all 150 valid character-sheet scripts and rejected the one
   HTML without a character-sheet JSON script.
-- Read-only parsing of all 151 existing standalone-converter Markdown outputs
-  accepted 149 as new-sheet candidates. Two were intentionally blocked: one
+- Read-only parsing of all 163 existing standalone-converter Markdown outputs
+  accepted 161 as new-sheet candidates after explicit legacy permission. Two
+  were intentionally blocked: one
   exceeded the six-skill limit and one repeated a recognized profile heading.
 - onefile and onedir builds completed.
 - Both executable forms passed PNG/JPEG decode, square crop, WebP encode, WebP
@@ -345,10 +356,10 @@ The game-derived names and classification data in `data/personality_keywords.csv
 
 ## Current Maintenance State
 
-- The accepted v2.0.0 feature, profile comparison, and Markdown interchange are
-  implemented locally. The latest public and private suites pass. Both onedir
-  and onefile were rebuilt after the Markdown/UI additions and passed the
-  packaged image pipeline plus light, dark, and high-contrast GUI smoke.
+- The public v2.0.0 feature and profile comparison are the repair baseline.
+  Local stacked repair branches add profile `<br>` compatibility and
+  AI-oriented Markdown format v2. Packaging and guide work follow on the next
+  stacked branch.
 - Use GitHub Issues for the next feature request or defect before substantial implementation.
 - `core/invariant_segments.py` exists, but the production save path does not currently call it. Byte preservation is provided by targeted replacements and focused tests. Before claiming universal runtime invariant-segment validation, either integrate the helper into the render/save path with tests or narrow the README statement.
 - The release announcement presented v1.2.0 as the first advertised update after v1.0.0; v1.1.0 existed publicly but was not separately advertised.

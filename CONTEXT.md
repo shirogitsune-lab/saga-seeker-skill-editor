@@ -166,6 +166,26 @@ It is not a character-sheet archive and does not contain images or internal
 identifiers.
 _Avoid_: Markdown backup, reversible export
 
+**AI Markdown format version（AI向けMarkdown形式バージョン）**:
+The interchange grammar version written in the Markdown format marker. It is
+independent of the desktop application's version.
+_Avoid_: App version, bare v2
+
+**Canonical AI Markdown（正規AI向けMarkdown）**:
+AI Markdown that has one recognized format marker and follows that version's
+complete structural grammar.
+_Avoid_: New Markdown, ordinary Markdown
+
+**Legacy AI Markdown（旧形式AI向けMarkdown）**:
+AI Markdown using the recognized version-1 marker or no format marker. It is
+detected before parsing and requires explicit user consent before interpretation.
+_Avoid_: Invalid Markdown, canonical Markdown
+
+**Markdown text block（Markdownテキストブロック）**:
+A delimited AI Markdown value whose content is opaque to the surrounding
+heading and list grammar.
+_Avoid_: Code block, Markdown section
+
 **Markdown import plan（Markdown取込プラン）**:
 The validated preview of known Markdown headings before a new character sheet
 is generated. Errors block creation; warnings require user review.

@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import venv
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,11 +75,13 @@ def test_python_resolver_accepts_explicit_supported_interpreter() -> None:
     assert result["Description"] == "-PythonPath"
 
 
-def test_python_resolver_prefers_repository_local_venv() -> None:
+def test_python_resolver_prefers_repository_local_venv(tmp_path: Path) -> None:
     resolver = ROOT / "scripts" / "resolve_build_python.ps1"
+    repository = tmp_path / "repository"
+    venv.EnvBuilder(with_pip=False).create(repository / ".venv")
     command = (
         f". '{resolver}'; "
-        f"$result = Resolve-BuildPython -RepositoryRoot '{ROOT}'; "
+        f"$result = Resolve-BuildPython -RepositoryRoot '{repository}'; "
         "$result | ConvertTo-Json -Compress"
     )
     completed = _run_resolver(command)
@@ -86,6 +89,9 @@ def test_python_resolver_prefers_repository_local_venv() -> None:
     result = json.loads(completed.stdout)
 
     assert result["Description"] == ".venv"
+    assert Path(result["Executable"]).resolve() == (
+        repository / ".venv" / "Scripts" / "python.exe"
+    ).resolve()
     assert tuple(result["Version"].values()) >= (3, 11, 0, -1, 0)
 
 

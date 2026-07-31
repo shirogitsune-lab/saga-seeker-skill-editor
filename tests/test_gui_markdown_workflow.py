@@ -369,9 +369,18 @@ def test_markdown_import_uses_a_scrollable_dedicated_preview_dialog() -> None:
     assert not dialog.confirm_button.isDefault()
 
 
+@pytest.mark.parametrize(
+    "legacy_body",
+    (
+        "## キャラクター詳細\n\n### 基本設定\n\n設定\n\n"
+        "### 補足情報\n\n消える本文\n",
+        "### 補足情報\n\n消える本文\n\n## キャラクター名\n\n復元候補\n",
+    ),
+)
 def test_legacy_unknown_heading_error_keeps_current_sheet_and_dirty_draft(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    legacy_body: str,
 ) -> None:
     _app()
     window = MainWindow()
@@ -382,10 +391,7 @@ def test_legacy_unknown_heading_error_keeps_current_sheet_and_dirty_draft(
     original_sheet = window.sheet
     original_draft = window.character_draft
     source = tmp_path / "legacy-unknown-heading.md"
-    source.write_text(
-        "## キャラクター詳細\n\n### 基本設定\n\n設定\n\n### 補足情報\n\n消える本文\n",
-        encoding="utf-8",
-    )
+    source.write_text(legacy_body, encoding="utf-8")
     monkeypatch.setattr(window, "_confirm_legacy_markdown_parse", lambda _kind: True)
     monkeypatch.setattr(window, "_present_error_dialog", lambda _error: None)
     shown_issues = []

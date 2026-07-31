@@ -841,6 +841,16 @@ def _split_h2_sections(
                 current = heading
                 sections[current] = []
             continue
+        orphan_h3 = re.fullmatch(r"###\s+(.+?)\s*", line)
+        if current is None and orphan_h3 is not None:
+            issues.append(
+                _error(
+                    "orphan-legacy-h3",
+                    "旧形式に所属先セクションのない項目"
+                    f"「{orphan_h3.group(1)}」があります",
+                )
+            )
+            continue
         if current is not None:
             sections[current].append(line)
     return sections, tuple(issues)

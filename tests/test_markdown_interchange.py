@@ -632,6 +632,30 @@ def test_legacy_unknown_heading_without_body_is_still_a_blocking_error() -> None
     assert any(issue.code == "unknown-profile-field" for issue in plan.issues)
 
 
+@pytest.mark.parametrize(
+    "body",
+    (
+        "### 補足情報\n\nこの文章を黙って捨ててはならない\n\n"
+        "## キャラクター名\n\n復元候補\n",
+        "## キャラクター名\n\n復元候補\n\n"
+        "## 未知の区切り\n\n区切り本文\n\n"
+        "### 補足情報\n\nこの文章を黙って捨ててはならない\n\n"
+        "## ステータス\n\n- 筋力: A\n",
+    ),
+)
+def test_legacy_orphan_h3_without_recognized_h2_is_a_blocking_error(
+    body: str,
+) -> None:
+    plan = parse_character_markdown(
+        body.encode("utf-8"),
+        catalog=load_personality_catalog(),
+        allow_legacy=True,
+    )
+
+    assert not plan.can_create
+    assert any(issue.code == "orphan-legacy-h3" for issue in plan.issues)
+
+
 def test_legacy_all_seven_official_profile_fields_remain_supported() -> None:
     labels = [label for _key, label in (
         ("basicSettings", "基本設定"),

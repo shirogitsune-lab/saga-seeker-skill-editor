@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 import os
 from pathlib import Path
 import sys
+import shutil
+import tempfile
 from uuid import UUID
 
 
@@ -51,7 +53,7 @@ def _configure_platform(mode: str) -> None:
         os.environ.setdefault("QT_SCALE_FACTOR", "1")
 
 
-def _run(args: argparse.Namespace) -> None:
+def _generate_to_directory(args: argparse.Namespace, output_dir: Path) -> None:
     from PySide6.QtCore import QSettings, Qt
     from PySide6.QtGui import QGuiApplication
     from PySide6.QtWidgets import (
@@ -77,7 +79,7 @@ def _run(args: argparse.Namespace) -> None:
     )
     from saga_seeker_skill_editor.gui.main_window import (
         MainWindow,
-        format_markdown_import_preview,
+        MarkdownImportPreviewDialog,
     )
     from saga_seeker_skill_editor.gui.theme_manager import ThemeId, ThemeManager
     from saga_seeker_skill_editor.resources import resource_path
@@ -91,12 +93,6 @@ def _run(args: argparse.Namespace) -> None:
         raise RuntimeError(
             "正式画像はWindowsの通常Qtプラットフォームでだけ生成できます"
         )
-
-    output_dir = args.output_dir.resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
-    for stale in output_dir.glob("*.png"):
-        if stale.name not in SCREENSHOTS:
-            stale.unlink()
 
     settings = QSettings(
         str(output_dir / ".screenshot-settings.ini"),
@@ -173,6 +169,8 @@ def _run(args: argparse.Namespace) -> None:
         render_ai_markdown(sheet),
         catalog=catalog,
     )
+    state_workspace = output_dir / ".state-workspace"
+    state_workspace.mkdir()
 
     def new_window(theme: ThemeId = ThemeId.LIGHT, *, loaded: bool = True):
         theme_manager.apply_theme(theme, persist=False)
@@ -220,6 +218,9 @@ def _run(args: argparse.Namespace) -> None:
         widget.deleteLater()
         app.processEvents()
 
+    def temporary_state_path(suffix: str) -> Path:
+        return state_workspace / f"ANON-GUIDE{suffix}"
+
     capture(SCREENSHOTS[0], new_window(loaded=False))
 
     window = new_window()
@@ -248,32 +249,38 @@ def _run(args: argparse.Namespace) -> None:
     window.edit_tabs.setCurrentIndex(window.memory_tab_index)
     capture(SCREENSHOTS[6], window)
 
-    capture(
-        SCREENSHOTS[7],
-        stage_message(
-            "Markdown取込プレビュー",
-            format_markdown_import_preview(markdown_plan)
-            + "\n\nこの内容で新規作成しますか？",
-        ),
-    )
+    capture(SCREENSHOTS[7], MarkdownImportPreviewDialog(markdown_plan))
 
-    window = new_window()
-    window.read_only_badge.setVisible(True)
-    window.status_label.setText("△ 読み取り専用")
-    window.status_detail_label.setText(
-        "構造差異があるため、内容を表示したまま保存を停止しています"
+    original_raw = render_candidate_html(document)
+    read_only_raw = original_raw.replace(
+        b'"formatVersion": "1.0.0"',
+        b'"formatVersion": "9.0.0"',
+        1,
     )
-    window.character_details_editor.name_edit.setReadOnly(True)
-    for edit in window.character_details_editor.profile_edits.values():
-        edit.setReadOnly(True)
+    if read_only_raw == original_raw:
+        raise RuntimeError("読み取り専用検証用の形式番号を変更できません")
+    read_only_source = temporary_state_path("-read-only.html")
+    read_only_source.write_bytes(read_only_raw)
+    window = new_window(loaded=False)
+    loaded_read_only = window.load_path(read_only_source)
+    read_only_source.unlink(missing_ok=True)
+    if not loaded_read_only or window.sheet is None or not window.sheet.whole_sheet_read_only:
+        raise RuntimeError("実際の読込処理で読み取り専用状態へ遷移できません")
     capture(SCREENSHOTS[8], window)
 
     window = new_window()
-    window.status_label.setText("✓ 保存完了")
-    window.status_detail_label.setText(
-        "匿名サンプルを別名で保存しました。元ファイルは変更していません"
-    )
-    window.file_label.setText("ガイド用サンプル_保存済み.html")
+    window.character_details_editor.name_edit.setText("ガイド用サンプル 保存確認")
+    save_destination = temporary_state_path("-saved.html")
+    window._choose_save_path = lambda: save_destination
+    if (
+        not window.save_as()
+        or not save_destination.is_file()
+        or window.current_path != save_destination
+        or window._has_changes()
+    ):
+        save_destination.unlink(missing_ok=True)
+        raise RuntimeError("実際の別名保存処理を完了できません")
+    save_destination.unlink()
     capture(SCREENSHOTS[9], window)
 
     window = new_window()
@@ -308,14 +315,23 @@ def _run(args: argparse.Namespace) -> None:
     window.character_details_editor.replace_icon_button.setFocus()
     capture(SCREENSHOTS[13], window)
 
-    capture(
-        SCREENSHOTS[14],
-        stage_message(
-            "Markdown書出し完了",
-            "AI向けMarkdown形式 v2を書き出しました。\n"
-            "画像と内部IDは含まれません。実在の保存先パスはガイド画像へ表示しません。",
-        ),
-    )
+    window = new_window()
+    background_edit = window.character_details_editor.profile_edits["background"]
+    background_edit.setPlainText(background_edit.toPlainText() + "\nMarkdown書出し確認")
+    markdown_destination = temporary_state_path("-export.md")
+    baseline = window.sheet.raw_html if window.sheet is not None else b""
+    dirty_before = window._has_changes()
+    if not dirty_before:
+        raise RuntimeError("Markdown書出し前の編集状態を作成できません")
+    window._choose_markdown_save_path = lambda: markdown_destination
+    if not window.export_ai_markdown() or not markdown_destination.is_file():
+        markdown_destination.unlink(missing_ok=True)
+        raise RuntimeError("実際のMarkdown書出し処理を完了できません")
+    if window.sheet is None or window.sheet.raw_html != baseline or window._has_changes() != dirty_before:
+        markdown_destination.unlink(missing_ok=True)
+        raise RuntimeError("Markdown書出しがHTMLの基準状態または編集中状態を変更しました")
+    markdown_destination.unlink()
+    capture(SCREENSHOTS[14], window)
 
     capture(
         SCREENSHOTS[15],
@@ -347,11 +363,39 @@ def _run(args: argparse.Namespace) -> None:
     settings_file = output_dir / ".screenshot-settings.ini"
     if settings_file.exists():
         settings_file.unlink()
-    generated = sorted(path.name for path in output_dir.glob("*.png"))
-    if generated != sorted(SCREENSHOTS):
-        raise RuntimeError("20状態のファイル集合が一致しません")
+    shutil.rmtree(state_workspace)
+
+
+def _run(args: argparse.Namespace) -> None:
+    try:
+        from user_guide_artifacts import (
+            replace_directory_atomically,
+            validate_screenshot_directory,
+        )
+    except ModuleNotFoundError:  # Imported as scripts.generate... in tests/tools.
+        from scripts.user_guide_artifacts import (
+            replace_directory_atomically,
+            validate_screenshot_directory,
+        )
+
+    output_dir = args.output_dir.resolve()
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    staged = Path(
+        tempfile.mkdtemp(prefix=f".{output_dir.name}-staged-", dir=output_dir.parent)
+    )
+    try:
+        _generate_to_directory(args, staged)
+        validate_screenshot_directory(
+            staged,
+            expected_names=SCREENSHOTS,
+            expected_size=IMAGE_SIZE,
+        )
+        replace_directory_atomically(staged, output_dir)
+    finally:
+        if staged.exists():
+            shutil.rmtree(staged)
     print(
-        f"{args.mode}: {len(generated)} images, "
+        f"{args.mode}: {len(SCREENSHOTS)} images, "
         f"{IMAGE_SIZE[0]}x{IMAGE_SIZE[1]}, dataset={DATASET_ID}"
     )
 

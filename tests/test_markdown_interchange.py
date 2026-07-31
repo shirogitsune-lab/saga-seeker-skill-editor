@@ -577,3 +577,119 @@ def test_legacy_ambiguous_structures_are_errors(
 
     assert not plan.can_create
     assert any(issue.code == code for issue in plan.issues)
+
+
+@pytest.mark.parametrize(
+    "unknown_heading",
+    ("### 補足情報", "## 補足情報"),
+)
+def test_legacy_unknown_structural_heading_is_a_blocking_error(
+    unknown_heading: str,
+) -> None:
+    raw = f"""## キャラクター名
+
+復元候補
+
+## キャラクター詳細
+
+### 基本設定
+
+ここは残る
+
+{unknown_heading}
+
+この文章を黙って捨ててはならない
+
+## ステータス
+
+- 筋力: A
+""".encode("utf-8")
+
+    plan = parse_character_markdown(
+        raw,
+        catalog=load_personality_catalog(),
+        allow_legacy=True,
+    )
+
+    assert not plan.can_create
+    assert any(
+        issue.code in {"unknown-legacy-section", "unknown-profile-field"}
+        for issue in plan.issues
+        if issue.severity == "error"
+    )
+
+
+def test_legacy_unknown_heading_without_body_is_still_a_blocking_error() -> None:
+    plan = parse_character_markdown(
+        "## キャラクター詳細\n\n### 基本設定\n\n設定\n\n### 補足情報\n".encode(
+            "utf-8"
+        ),
+        catalog=load_personality_catalog(),
+        allow_legacy=True,
+    )
+
+    assert not plan.can_create
+    assert any(issue.code == "unknown-profile-field" for issue in plan.issues)
+
+
+def test_legacy_all_seven_official_profile_fields_remain_supported() -> None:
+    labels = [label for _key, label in (
+        ("basicSettings", "基本設定"),
+        ("appearance", "外見"),
+        ("personality", "性格"),
+        ("speechStyle", "口調"),
+        ("background", "経歴"),
+        ("talentsAndRole", "特技と役割"),
+        ("otherFeatures", "その他の特徴"),
+    )]
+    body = "\n\n".join(f"### {label}\n\n{label}の本文" for label in labels)
+    plan = parse_character_markdown(
+        f"## キャラクター詳細\n\n{body}\n".encode("utf-8"),
+        catalog=load_personality_catalog(),
+        allow_legacy=True,
+    )
+
+    assert plan.can_create
+    assert plan.profile["otherFeatures"] == "その他の特徴の本文"
+
+
+def test_canonical_personality_lines_reject_internal_blank_lines() -> None:
+    sheet = _rich_sheet()
+    raw = render_ai_markdown(sheet).decode("utf-8")
+    raw = raw.replace(
+        "- 枠1: 勇敢\n- 枠2:",
+        "- 枠1: 勇敢\n\n- 枠2:",
+        1,
+    )
+
+    with pytest.raises(MarkdownImportError, match="性格キーワード.*空行"):
+        parse_character_markdown(
+            raw.encode("utf-8"),
+            catalog=load_personality_catalog(),
+        )
+
+
+@pytest.mark.parametrize("count", [0, 1, 6])
+def test_canonical_personality_writer_shape_accepts_zero_one_or_six_entries(
+    count: int,
+) -> None:
+    sheet = _rich_sheet()
+    raw = render_ai_markdown(sheet).decode("utf-8")
+    before, remainder = raw.split("## 性格キーワード\n", 1)
+    _old_personalities, after = remainder.split("## ステータス\n", 1)
+    catalog = load_personality_catalog()
+    personality_lines = "".join(
+        f"- 枠{index}: {catalog[index - 1].name}\n"
+        for index in range(1, count + 1)
+    )
+    candidate = (
+        before
+        + "## 性格キーワード\n\n"
+        + personality_lines
+        + "\n## ステータス\n"
+        + after
+    )
+
+    plan = parse_character_markdown(candidate.encode("utf-8"), catalog=catalog)
+
+    assert len(plan.personalities) == count

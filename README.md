@@ -97,7 +97,7 @@ Markdownからの新規作成は開始画面だけでなく、HTMLまたは新�
 
 形式マーカー1付きまたはマーカーなしの旧形式は、形式判定だけを先に行います。
 「旧形式として解析する」を選択するまで本文を解析しません。欠落項目は警告、
-複数の解釈が可能なスキルや見出しはエラーとして区別します。
+複数の解釈が可能なスキル、未知のH2/H3見出しはエラーとして区別します。
 
 性格キーワードは同梱カタログとの完全一致が必要です。未知・重複・途中に
 空きのある枠、E～S以外のステータス、7件以上のスキル、固定見出しの欠落・
@@ -171,6 +171,12 @@ Windowsビルド:
 powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onedir
 powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onefile
 ```
+
+ビルド用Pythonは、`-PythonPath`、リポジトリの`.venv`、Windowsの`py.exe`
+（3.13、3.12、3.11）、PATHの`python`の順でPython 3.11以上を探します。
+明示指定する場合は、例えば
+`powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onedir -PythonPath C:\Python312\python.exe`
+と実行します。
 
 ## ビルドについて
 

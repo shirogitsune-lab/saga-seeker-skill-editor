@@ -110,7 +110,9 @@ profile_field_7 = line("### その他の特徴"), text_block, blank_lines ;
 
 personality_section =
                  line("## 性格キーワード"), blank_lines,
-                 { line(personality_line) }, blank_lines ;
+                 [ personality_lines ], blank_lines ;
+personality_lines = line(personality_line),
+                 { line(personality_line) } ;
 personality_line =
                  "- 枠", slot_1_to_6, ": ", catalog_keyword_name ;
 
@@ -155,6 +157,12 @@ shown above are also fixed.
 Personality slots start at 1, are contiguous, unique, and use exact catalog
 names. An empty personality section has no placeholder line. Status always has
 all six lines. An empty skill or memory section has no H3 entry.
+
+Blank lines immediately after `## 性格キーワード` and immediately before
+`## ステータス` are structural separators. Once the first personality line
+has appeared, no blank line may occur before the last personality line. Thus a
+blank line between two personality entries is an error, not a silently removed
+separator.
 
 ## Text-block codec
 
@@ -241,9 +249,13 @@ Legacy processing order is fixed:
 The normal import path never parses legacy content before step 4.
 
 The v1 marker and unmarked legacy dialect use their existing H2/H3 field names.
-Recognized headings may occur at most once. Skills are unambiguous only when
-each skill uses an H3 name; a bullet-only skill section is an error. Bullets
-inside an H3 skill description remain description text.
+The recognized H2 strings are `キャラクター名`, `キャラクター詳細`,
+`性格キーワード`, `ステータス`, `スキル`, and `思い出`. The only recognized
+profile H3 strings are the seven canonical profile field names. Recognized
+headings may occur at most once. Any other structural H2 or H3 is an error;
+its body is never silently discarded. Skills are unambiguous only when each
+skill uses an H3 name; a bullet-only skill section is an error. Bullets inside
+an H3 skill description remain description text.
 
 Legacy warnings:
 
@@ -257,6 +269,7 @@ Legacy errors:
 - bullet-only or otherwise ambiguous skills;
 - duplicate recognized headings;
 - malformed or unknown status lines;
+- an unknown structural H2 or profile H3 heading;
 - an unknown personality keyword;
 - CR or LF in a resulting character or skill name; and
 - any structure with more than one possible interpretation.

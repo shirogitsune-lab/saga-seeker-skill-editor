@@ -622,7 +622,17 @@ def _parse_canonical_personalities(
             )
         if cursor.current() == "":
             cursor.skip_blank_lines()
-            continue
+            if cursor.current() == "## ステータス":
+                break
+            if (cursor.current() or "").startswith("## "):
+                raise MarkdownImportError(
+                    "AI向けMarkdown形式 v2では"
+                    "「## ステータス」が次のセクションです"
+                )
+            raise MarkdownImportError(
+                "AI向けMarkdown形式 v2の性格キーワード行間に"
+                "空行を入れることはできません"
+            )
         if (cursor.current() or "").startswith("## "):
             raise MarkdownImportError(
                 "AI向けMarkdown形式 v2では"
@@ -799,6 +809,14 @@ def create_character_sheet_from_markdown(
 def _split_h2_sections(
     lines: Sequence[str],
 ) -> tuple[dict[str, list[str]], tuple[MarkdownImportIssue, ...]]:
+    recognized = {
+        "キャラクター名",
+        "キャラクター詳細",
+        "性格キーワード",
+        "ステータス",
+        "スキル",
+        "思い出",
+    }
     sections: dict[str, list[str]] = {}
     issues: list[MarkdownImportIssue] = []
     current: str | None = None
@@ -806,7 +824,15 @@ def _split_h2_sections(
         match = re.fullmatch(r"##\s+(.+?)\s*", line)
         if match is not None:
             heading = match.group(1)
-            if heading in sections:
+            if heading not in recognized:
+                issues.append(
+                    _error(
+                        "unknown-legacy-section",
+                        f"旧形式に未知のセクション「{heading}」があります",
+                    )
+                )
+                current = None
+            elif heading in sections:
                 issues.append(
                     _error("duplicate-section", f"セクション「{heading}」が重複しています")
                 )
@@ -833,6 +859,12 @@ def _split_h3_fields(
         if match is not None:
             heading = match.group(1)
             if heading not in recognized:
+                issues.append(
+                    _error(
+                        f"unknown-{code_prefix}-field",
+                        f"旧形式に未知の項目「{heading}」があります",
+                    )
+                )
                 current = None
             elif heading in fields:
                 issues.append(

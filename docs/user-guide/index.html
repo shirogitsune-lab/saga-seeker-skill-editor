@@ -266,11 +266,11 @@
       </div>
       <figure>
         <img src="user-guide-assets/08-markdown-import-preview.png" width="1440" height="900" loading="lazy" alt="AI向けMarkdown形式 v2の取込プレビュー。思い出は検出するが復元しないと表示される">
-        <figcaption>取込プレビューで形式、名前、各項目、警告、復元されない情報を確認します。</figcaption>
+        <figcaption>スクロール可能な取込プレビューで、値と警告の全文、復元されない全項目を確認します。文字は選択してコピーできます。</figcaption>
       </figure>
       <p class="limit"><strong>重要:</strong> 思い出は件数と構造を検出しますが、Markdownから新規作成したシートへは復元されません。画像と内部IDも復元されず、スキルは新しいオリジナルスキルになります。</p>
       <h3>旧形式Markdown</h3>
-      <p>マーカーなしを含む旧形式を検出した場合、内容を先に解析しません。「旧形式として解析する」を明示した後にだけ詳細プレビューへ進みます。欠落項目は警告になり、解釈が一意でない構造はエラーになります。</p>
+      <p>マーカーなしを含む旧形式を検出した場合、内容を先に解析しません。「旧形式として解析する」を明示した後にだけ詳細プレビューへ進みます。欠落項目は警告になり、解釈が一意でない構造や未知のH2/H3見出しはエラーになります。</p>
     </section>
 
     <section id="readonly" aria-labelledby="readonly-heading">
@@ -278,7 +278,7 @@
       <p>HTML内の表示とデータが安全に対応付けられないときは、推測して保存せず、内容を読み取り専用で表示します。</p>
       <figure>
         <img src="user-guide-assets/09-read-only.png" width="1440" height="900" loading="lazy" alt="読み取り専用バッジと理由が表示された画面">
-        <figcaption>読み取り専用は内容を失った状態ではありません。安全な更新を停止した状態です。</figcaption>
+        <figcaption>未知の形式番号を実際に読み込んだ状態です。読み取り専用は内容を失った状態ではなく、安全な更新を停止した状態です。</figcaption>
       </figure>
       <ul>
         <li>元のゲームからHTMLをもう一度出力して試します。</li>
@@ -297,7 +297,7 @@
       </ol>
       <figure>
         <img src="user-guide-assets/10-save-complete.png" width="1440" height="900" loading="lazy" alt="別名での保存が完了した状態">
-        <figcaption>保存後は新しいファイルが比較の基準になります。</figcaption>
+        <figcaption>「別名で保存」を実行した直後です。保存後は新しいファイルが比較の基準になります。</figcaption>
       </figure>
       <p class="warning">大切なシートは、ゲームで読み込めることを確認するまで元HTMLを残してください。</p>
     </section>
@@ -343,7 +343,7 @@
         <figure><img src="user-guide-assets/12-comparison-window.png" width="1440" height="900" loading="lazy" alt="プロフィール比較を別ウィンドウで開いた画面"><figcaption>比較別ウィンドウ</figcaption></figure>
         <figure><img src="user-guide-assets/13-vacant-skill.png" width="1440" height="900" loading="lazy" alt="未使用のスキル枠へ追加する画面"><figcaption>未使用枠追加</figcaption></figure>
         <figure><img src="user-guide-assets/14-image-change.png" width="1440" height="900" loading="lazy" alt="キャラクター画像のプレビューと差し替えボタン"><figcaption>画像変更</figcaption></figure>
-        <figure><img src="user-guide-assets/15-markdown-export.png" width="1440" height="900" loading="lazy" alt="AI向けMarkdown形式 v2の書出し完了画面"><figcaption>Markdown書出し</figcaption></figure>
+        <figure><img src="user-guide-assets/15-markdown-export.png" width="1440" height="900" loading="lazy" alt="AI向けMarkdown形式 v2を書き出した直後の編集画面"><figcaption>実際のMarkdown書出し後も、HTMLの未保存変更は保持されます。</figcaption></figure>
         <figure><img src="user-guide-assets/16-input-error.png" width="1440" height="900" loading="lazy" alt="単一行項目に改行がある入力エラー画面"><figcaption>入力エラー</figcaption></figure>
         <figure><img src="user-guide-assets/17-light-theme.png" width="1440" height="900" loading="lazy" alt="ライトテーマの編集画面"><figcaption>ライト</figcaption></figure>
         <figure><img src="user-guide-assets/18-dark-theme.png" width="1440" height="900" loading="lazy" alt="ダークテーマの編集画面"><figcaption>ダーク</figcaption></figure>

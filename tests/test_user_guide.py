@@ -4,7 +4,6 @@ from hashlib import sha256
 from html.parser import HTMLParser
 import importlib.util
 from pathlib import Path
-import struct
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -117,13 +116,18 @@ def test_canonical_guide_is_offline_semantic_and_references_exact_assets() -> No
 
 
 def test_formal_screenshot_set_is_exact_and_has_fixed_dimensions() -> None:
+    module_path = ROOT / "scripts" / "user_guide_artifacts.py"
+    spec = importlib.util.spec_from_file_location("guide_validation", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
     paths = sorted(ASSET_DIR.glob("*.png"))
     assert [path.name for path in paths] == list(EXPECTED_SCREENSHOTS)
-    for path in paths:
-        raw = path.read_bytes()
-        assert raw.startswith(b"\x89PNG\r\n\x1a\n")
-        assert raw[12:16] == b"IHDR"
-        assert struct.unpack(">II", raw[16:24]) == (1440, 900)
+    module.validate_screenshot_directory(
+        ASSET_DIR,
+        expected_names=EXPECTED_SCREENSHOTS,
+        expected_size=(1440, 900),
+    )
 
 
 def test_packaging_is_byte_identical_removes_stale_assets_and_is_idempotent(
@@ -167,3 +171,152 @@ def test_user_guide_sources_are_not_ignored_by_git() -> None:
             "tests/",
         }
     )
+
+
+def test_packaging_refuses_canonical_source_directory_without_changes(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import shutil
+    import pytest
+
+    module = _load_packaging_module()
+    canonical = tmp_path / "canonical"
+    shutil.copytree(GUIDE_DIR, canonical)
+    monkeypatch.setattr(module, "CANONICAL_DIR", canonical)
+    monkeypatch.setattr(module, "CANONICAL_HTML", canonical / "index.html")
+    monkeypatch.setattr(
+        module,
+        "CANONICAL_ASSETS",
+        canonical / "user-guide-assets",
+    )
+    before = _tree_hash(canonical)
+
+    with pytest.raises(module.UserGuidePackagingError):
+        module.package_user_guide(canonical)
+
+    assert _tree_hash(canonical) == before
+
+
+def test_packaging_refuses_parent_and_child_of_canonical_directory(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import shutil
+    import pytest
+
+    module = _load_packaging_module()
+    parent = tmp_path / "source-root"
+    canonical = parent / "canonical"
+    shutil.copytree(GUIDE_DIR, canonical)
+    monkeypatch.setattr(module, "CANONICAL_DIR", canonical)
+    monkeypatch.setattr(module, "CANONICAL_HTML", canonical / "index.html")
+    monkeypatch.setattr(module, "CANONICAL_ASSETS", canonical / "user-guide-assets")
+    before = _tree_hash(parent)
+
+    for destination in (parent, canonical / "distribution"):
+        with pytest.raises(module.UserGuidePackagingError):
+            module.package_user_guide(destination)
+
+    assert _tree_hash(parent) == before
+
+
+def test_packaging_failure_preserves_previous_distribution(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import pytest
+
+    module = _load_packaging_module()
+    destination = tmp_path / "distribution"
+    old_assets = destination / "user-guide-assets"
+    old_assets.mkdir(parents=True)
+    (destination / module.DISTRIBUTED_HTML_NAME).write_text("old", encoding="utf-8")
+    (old_assets / "old.png").write_bytes(b"old")
+    before = _tree_hash(destination)
+
+    def fail_publish(*_args, **_kwargs) -> None:
+        raise module.GuideArtifactError("injected publish failure")
+
+    monkeypatch.setattr(module, "publish_entries_atomically", fail_publish)
+    with pytest.raises(module.UserGuidePackagingError):
+        module.package_user_guide(destination)
+
+    assert _tree_hash(destination) == before
+
+
+def test_screenshot_generator_does_not_forge_application_status_text() -> None:
+    source = (ROOT / "scripts" / "generate_user_guide_screenshots.py").read_text(
+        encoding="utf-8"
+    )
+    assert "window.status_label.setText(" not in source
+    assert "window.status_detail_label.setText(" not in source
+    assert "window.file_label.setText(" not in source
+    assert 'stage_message(\n            "Markdown書出し完了"' not in source
+
+
+def test_screenshot_support_validates_complete_png_and_publishes_atomically(
+    tmp_path: Path,
+) -> None:
+    module_path = ROOT / "scripts" / "user_guide_artifacts.py"
+    assert module_path.is_file()
+    spec = importlib.util.spec_from_file_location("user_guide_artifacts", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    valid = ASSET_DIR / EXPECTED_SCREENSHOTS[0]
+    truncated = tmp_path / "truncated.png"
+    truncated.write_bytes(valid.read_bytes()[:32])
+    import pytest
+
+    with pytest.raises(module.GuideArtifactError):
+        module.validate_png_file(truncated, expected_size=(1440, 900))
+
+    old = tmp_path / "published"
+    old.mkdir()
+    (old / "old.txt").write_text("keep", encoding="utf-8")
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    (staged / "new.txt").write_text("new", encoding="utf-8")
+    before = _tree_hash(old)
+
+    def fail_after_backup(_source: Path, _target: Path) -> None:
+        raise OSError("injected publish failure")
+
+    with pytest.raises(module.GuideArtifactError):
+        module.replace_directory_atomically(
+            staged,
+            old,
+            replace_operation=fail_after_backup,
+        )
+    assert _tree_hash(old) == before
+
+
+def test_failed_screenshot_generation_keeps_previous_complete_set(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import argparse
+    import pytest
+
+    module_path = ROOT / "scripts" / "generate_user_guide_screenshots.py"
+    spec = importlib.util.spec_from_file_location("screenshot_generator", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    published = tmp_path / "published"
+    published.mkdir()
+    (published / "old.txt").write_text("keep", encoding="utf-8")
+    before = _tree_hash(published)
+
+    def fail_after_partial_output(_args, staged: Path) -> None:
+        (staged / module.SCREENSHOTS[0]).write_bytes(b"partial")
+        raise RuntimeError("injected generation failure")
+
+    monkeypatch.setattr(module, "_generate_to_directory", fail_after_partial_output)
+    args = argparse.Namespace(mode="offscreen", output_dir=published)
+    with pytest.raises(RuntimeError):
+        module._run(args)
+
+    assert _tree_hash(published) == before

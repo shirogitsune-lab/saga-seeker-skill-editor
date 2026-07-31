@@ -99,6 +99,8 @@ The original input file is not an in-place editing target. Safety and preservati
   marker position, unknown version, duplicate, mixed, and malformed blocks.
 - Requires explicit `旧形式として解析する` consent before interpreting marked
   v1 or unmarked legacy content.
+- Rejects unknown structural legacy H2 and profile H3 headings instead of
+  silently discarding their content.
 - Imports UTF-8 Markdown up to 8 MiB and never interprets embedded HTML.
 - Creates a new sheet with the default icon, `charm == "E"`, no memories, and
   newly generated identity/timestamp metadata.
@@ -106,7 +108,8 @@ The original input file is not an in-place editing target. Safety and preservati
   empty `type`/`key`; protected default identity is never inferred.
 - Requires exact catalog personality names and blocks unknown, duplicate,
   sparse, or over-limit input instead of silently repairing it.
-- Shows a preview and warnings before replacement. Parse errors, validation
+- Shows every value, every warning, and every non-restored field in a
+  scrollable, selectable preview before replacement. Parse errors, validation
   errors, preview cancellation, and generation failure retain the current
   sheet and draft.
 - Reports detected memories separately and never restores them.
@@ -154,8 +157,11 @@ See:
 - Automated `offscreen` inspection and formal Windows Qt capture are separate.
 - Formal images use anonymous synthetic dataset `ANON-GUIDE-001`, a fixed
   1440×900 widget capture, Windows normal Qt, 100% scale, and Fusion style.
-- `scripts/package_user_guide.py` removes stale destination guide images and
-  produces idempotent copies. `build.ps1` invokes it after both build modes.
+- Screenshot generation stages and fully decodes the exact 20 PNG files before
+  replacing the old set; a failed publish restores the old set.
+- `scripts/package_user_guide.py` rejects canonical-source path overlaps,
+  transactionally replaces the destination HTML/assets, removes stale images,
+  and produces idempotent copies. `build.ps1` invokes it after both build modes.
 
 ## v2.0.0 Character-Sheet Editing
 
@@ -340,6 +346,10 @@ Never modify a private fixture original. Tests must read originals or copy them 
 powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onedir
 powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onefile
 ```
+
+`build.ps1` resolves Python 3.11+ in this order: explicit `-PythonPath`, local
+`.venv`, `py.exe` (3.13/3.12/3.11), then PATH `python`. It has no
+machine-specific installation path fallback.
 
 - onedir output: `dist/SagaSeekerSkillEditor/`
 - onefile output: `dist/SagaSeekerSkillEditor.exe`

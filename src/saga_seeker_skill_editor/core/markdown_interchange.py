@@ -839,6 +839,7 @@ def _split_h2_sections(
         "スキル",
         "思い出",
     }
+    h3_allowed = {"キャラクター詳細", "スキル", "思い出"}
     sections: dict[str, list[str]] = {}
     issues: list[MarkdownImportIssue] = []
     current: str | None = None
@@ -863,16 +864,27 @@ def _split_h2_sections(
                 current = heading
                 sections[current] = []
             continue
-        orphan_h3 = re.fullmatch(r"###\s+(.+?)\s*", line)
-        if current is None and orphan_h3 is not None:
-            issues.append(
-                _error(
-                    "orphan-legacy-h3",
-                    "旧形式に所属先セクションのない項目"
-                    f"「{orphan_h3.group(1)}」があります",
+        h3_match = re.fullmatch(r"###\s+(.+?)\s*", line)
+        if h3_match is not None:
+            if current is None:
+                issues.append(
+                    _error(
+                        "orphan-legacy-h3",
+                        "旧形式に所属先セクションのない項目"
+                        f"「{h3_match.group(1)}」があります",
+                    )
                 )
-            )
-            continue
+                continue
+            if current not in h3_allowed:
+                issues.append(
+                    _error(
+                        "invalid-legacy-h3-owner",
+                        f"旧形式のセクション「{current}」にはH3項目"
+                        f"「{h3_match.group(1)}」を置けません",
+                    )
+                )
+                current = None
+                continue
         if current is not None:
             sections[current].append(line)
     return sections, tuple(issues)

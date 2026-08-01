@@ -432,3 +432,61 @@ def test_legacy_unknown_heading_error_keeps_current_sheet_and_dirty_draft(
         window.character_details_editor.profile_edits["personality"].toPlainText()
         == "保持する未保存内容"
     )
+
+
+def test_legacy_h3_under_name_keeps_loaded_sheet_path_baseline_and_dirty_draft(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _app()
+    window = MainWindow()
+    assert window.create_new_sheet()
+    assert window.sheet is not None
+    current_html = tmp_path / "current-sheet.html"
+    current_html.write_bytes(window.sheet.raw_html)
+    assert window.load_path(current_html)
+    window.character_details_editor.profile_edits["personality"].setPlainText(
+        "保持する未保存内容"
+    )
+    original_sheet = window.sheet
+    original_path = window.current_path
+    original_baseline = window.sheet.diagnostic_baseline
+    original_draft = window.character_draft
+
+    source = tmp_path / "legacy-invalid-h3-owner.md"
+    source.write_text(
+        "## キャラクター名\n\n復元候補\n\n"
+        "### 補足情報\n\n名前へ連結してはならない\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(window, "_confirm_legacy_markdown_parse", lambda _kind: True)
+    monkeypatch.setattr(window, "_present_error_dialog", lambda _error: None)
+    shown_issues = []
+    monkeypatch.setattr(
+        window,
+        "_present_markdown_import_issues",
+        lambda plan: shown_issues.append(plan),
+    )
+    preview_calls = []
+    monkeypatch.setattr(
+        window,
+        "_confirm_markdown_import",
+        lambda plan: preview_calls.append(plan) or False,
+    )
+
+    assert not window.import_markdown_path(source)
+    assert preview_calls == []
+    assert len(shown_issues) == 1
+    assert any(
+        issue.code == "invalid-legacy-h3-owner"
+        for issue in shown_issues[0].issues
+    )
+    assert window.sheet is original_sheet
+    assert window.current_path == original_path
+    assert window.sheet.diagnostic_baseline is original_baseline
+    assert window.character_draft is original_draft
+    assert window.unsaved_changes
+    assert (
+        window.character_details_editor.profile_edits["personality"].toPlainText()
+        == "保持する未保存内容"
+    )

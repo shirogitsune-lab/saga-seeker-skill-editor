@@ -715,6 +715,76 @@ def test_legacy_orphan_h3_without_recognized_h2_is_a_blocking_error(
     assert any(issue.code == "orphan-legacy-h3" for issue in plan.issues)
 
 
+@pytest.mark.parametrize(
+    ("body", "expected_name"),
+    (
+        ("## キャラクター名\n\n### 補足情報\n", ""),
+        (
+            "## キャラクター名\n\n復元候補\n\n"
+            "### 補足情報\n\n名前へ連結してはならない\n",
+            "復元候補",
+        ),
+    ),
+)
+def test_legacy_h3_under_character_name_is_a_blocking_error(
+    body: str,
+    expected_name: str,
+) -> None:
+    plan = parse_character_markdown(
+        body.encode("utf-8"),
+        catalog=load_personality_catalog(),
+        allow_legacy=True,
+    )
+
+    assert not plan.can_create
+    assert plan.name == expected_name
+    issue = next(
+        issue
+        for issue in plan.issues
+        if issue.code == "invalid-legacy-h3-owner"
+    )
+    assert "補足情報" in issue.message
+    assert "キャラクター名" in issue.message
+
+
+@pytest.mark.parametrize("section", ("性格キーワード", "ステータス"))
+def test_legacy_h3_under_non_h3_section_is_a_blocking_error(
+    section: str,
+) -> None:
+    plan = parse_character_markdown(
+        f"## {section}\n\n### 補足情報\n\n解釈してはならない\n".encode(
+            "utf-8"
+        ),
+        catalog=load_personality_catalog(),
+        allow_legacy=True,
+    )
+
+    assert not plan.can_create
+    issue = next(
+        issue
+        for issue in plan.issues
+        if issue.code == "invalid-legacy-h3-owner"
+    )
+    assert "補足情報" in issue.message
+    assert section in issue.message
+
+
+def test_legacy_plain_preamble_text_remains_accepted() -> None:
+    plan = parse_character_markdown(
+        "これは構造見出しではない前文です\n\n"
+        "## キャラクター名\n\n復元候補\n".encode("utf-8"),
+        catalog=load_personality_catalog(),
+        allow_legacy=True,
+    )
+
+    assert plan.can_create
+    assert plan.name == "復元候補"
+    assert not any(
+        issue.code in {"orphan-legacy-h3", "invalid-legacy-h3-owner"}
+        for issue in plan.issues
+    )
+
+
 def test_legacy_all_seven_official_profile_fields_remain_supported() -> None:
     labels = [label for _key, label in (
         ("basicSettings", "基本設定"),

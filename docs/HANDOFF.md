@@ -99,8 +99,10 @@ The original input file is not an in-place editing target. Safety and preservati
   marker position, unknown version, duplicate, mixed, and malformed blocks.
 - Requires explicit `旧形式として解析する` consent before interpreting marked
   v1 or unmarked legacy content.
-- Rejects unknown structural legacy H2 and profile H3 headings instead of
-  silently discarding their content.
+- Rejects unknown structural legacy H2 headings and validates every legacy H3
+  against its owning H2. Profile H3 is limited to the official seven fields;
+  skill and memory H3 remain supported, while H3 under name, personality, or
+  status is a blocking error instead of becoming field text.
 - Imports UTF-8 Markdown up to 8 MiB and never interprets embedded HTML.
 - Creates a new sheet with the default icon, `charm == "E"`, no memories, and
   newly generated identity/timestamp metadata.
@@ -313,22 +315,23 @@ Public suite:
 uv run pytest -q --basetemp=work\pytest-handoff -o cache_dir=work\.pytest-handoff-cache
 ```
 
-The most recent remediation verification recorded:
+The most recent local re-review verification recorded:
 
-- Public run without private fixtures: `250 passed, 5 skipped`.
-- Focused Markdown interchange and GUI workflow run: `60 passed`.
+- Public run without private fixtures: `256 passed, 5 skipped`.
+- Focused Markdown interchange and GUI workflow run: `66 passed`.
 - Focused user-guide and build-Python resolution run: `19 passed`.
-- Configured private real-sheet integration: `5 passed`; no private path,
-  filename, sheet content, or character identifier was recorded.
-- Read-only parsing of the 162 standalone-converter Markdown outputs currently
-  present classified all 162 as `LEGACY_UNMARKED` and refused all 162 before
-  explicit legacy permission. After permission, 159 were valid new-sheet
+- The private real-sheet integration was not rerun for this legacy-Markdown-only
+  change. Its previous result remains `5 passed`; no private path, filename,
+  sheet content, or character identifier was recorded.
+- Read-only parsing of the 175 standalone-converter Markdown outputs currently
+  present classified all 175 as `LEGACY_UNMARKED` and refused all 175 before
+  explicit legacy permission. After permission, 172 were valid new-sheet
   candidates and 3 were intentionally blocked by ambiguity or validation
   errors. The preview detected 70 memory entries across 15 files, while import
   still restored no memories. Source hashes were unchanged and no parse
   exception occurred.
 - onefile and onedir builds completed after each build's internal public test
-  run also reported `250 passed, 5 skipped`.
+  run also reported `256 passed, 5 skipped`.
 - Both executable forms passed PNG/JPEG decode, square crop, WebP encode, WebP
   reload, and packaged default-WebP resolution.
 - Both executable forms launched successfully with light, dark, and

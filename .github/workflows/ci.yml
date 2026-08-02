@@ -1,9 +1,12 @@
-name: Review verification
+name: CI
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
-      - docs/user-guide-html-readme
+      - main
   workflow_dispatch:
 
 permissions:
@@ -13,7 +16,7 @@ env:
   PYTHONUTF8: "1"
 
 concurrency:
-  group: review-verification-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -32,7 +35,7 @@ jobs:
       QT_QPA_PLATFORM: offscreen
 
     steps:
-      - name: Check out review commit
+      - name: Check out source
         uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
@@ -72,7 +75,7 @@ jobs:
       QT_QPA_PLATFORM: offscreen
 
     steps:
-      - name: Check out review commit
+      - name: Check out source
         uses: actions/checkout@v4
 
       - name: Set up Python 3.13
@@ -121,7 +124,7 @@ jobs:
         if: success()
         shell: pwsh
         run: |
-          "## Review verification" >> $env:GITHUB_STEP_SUMMARY
+          "## CI verification" >> $env:GITHUB_STEP_SUMMARY
           "- Public tests passed on Python 3.11 and 3.13." >> $env:GITHUB_STEP_SUMMARY
           "- Windows onedir and onefile builds completed." >> $env:GITHUB_STEP_SUMMARY
           "- Both distributions contain the offline guide and exactly 20 PNG assets." >> $env:GITHUB_STEP_SUMMARY

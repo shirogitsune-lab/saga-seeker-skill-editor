@@ -1,5 +1,8 @@
 # Add lossy Markdown interchange and shared profile comparison
 
+The Markdown grammar and legacy-confirmation portion of this decision is
+superseded by ADR 0010. The profile-comparison decision remains current.
+
 ## Context
 
 Users need to compare profile prose, especially `basicSettings` and

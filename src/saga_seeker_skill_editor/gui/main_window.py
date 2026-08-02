@@ -14,11 +14,13 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QSplitter,
@@ -42,9 +44,12 @@ from saga_seeker_skill_editor.core.character_sheet import (
 )
 from saga_seeker_skill_editor.core.file_writer import SaveError, atomic_save_bytes
 from saga_seeker_skill_editor.core.markdown_interchange import (
+    MarkdownFormatDetection,
+    MarkdownFormatKind,
     MarkdownImportError,
     MarkdownImportPlan,
     create_character_sheet_from_markdown,
+    detect_markdown_format,
     parse_character_markdown,
     render_ai_markdown,
 )
@@ -109,6 +114,137 @@ class UiError:
     impact: str
     remedy: str
     details: str
+
+
+def _markdown_preview_value(value: str) -> str:
+    if value == "":
+        return "（空欄）"
+    return value.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _markdown_preview_field(label: str, value: str) -> str:
+    return f"【{label}】\n{_markdown_preview_value(value)}"
+
+
+def format_markdown_import_preview(plan: MarkdownImportPlan) -> str:
+    """Return the same detailed, user-facing summary shown before import."""
+
+    warning_lines = [
+        f"・{issue.message}"
+        for issue in plan.issues
+        if issue.severity == "warning"
+    ]
+    format_label = (
+        "AI向けMarkdown形式 v2"
+        if plan.format_kind is MarkdownFormatKind.CANONICAL_V2
+        else (
+            "旧形式（形式マーカー1）"
+            if plan.format_kind is MarkdownFormatKind.LEGACY_MARKED_V1
+            else "旧形式（形式マーカーなし）"
+        )
+    )
+    profile_lines = "\n\n".join(
+        _markdown_preview_field(label, plan.profile[key])
+        for key, label in (
+            ("basicSettings", "基本設定"),
+            ("appearance", "外見"),
+            ("personality", "性格"),
+            ("speechStyle", "口調"),
+            ("background", "経歴"),
+            ("talentsAndRole", "特技と役割"),
+            ("otherFeatures", "その他の特徴"),
+        )
+    )
+    status_lines = " / ".join(
+        f"{label}{plan.status[key]}"
+        for key, label in (
+            ("strength", "筋力"),
+            ("endurance", "耐久力"),
+            ("intelligence", "知力"),
+            ("mentalStrength", "精神力"),
+            ("agility", "素早さ"),
+            ("luck", "運"),
+        )
+    )
+    personality_names = "、".join(
+        item.name for item in plan.personalities
+    ) or "（なし）"
+    skill_lines = "\n\n".join(
+        f"【スキル {index}】\n"
+        f"名前:\n{_markdown_preview_value(skill.name)}\n"
+        f"説明:\n{_markdown_preview_value(skill.description)}"
+        for index, skill in enumerate(plan.skills, start=1)
+    ) or "（なし）"
+    summary = (
+        "次の解析結果で新しいキャラクターシートを作成します。\n\n"
+        f"形式: {format_label}\n"
+        f"名前:\n{_markdown_preview_value(plan.name)}\n\n"
+        "プロフィール\n"
+        f"{profile_lines}\n\n"
+        f"ステータス:\n{status_lines}\n\n"
+        f"性格キーワード:\n{personality_names}\n\n"
+        "スキル\n"
+        f"{skill_lines}\n\n"
+        f"思い出: {plan.memory_count}件検出\n"
+        "取込結果: 復元されません\n\n"
+        "復元されない項目:\n"
+        "・画像\n"
+        "・内部ID\n"
+        "・タイムスタンプ\n"
+        "・魅力\n"
+        "・元のスキル種別・キー\n\n"
+        "スキルはすべて新規オリジナルスキルになります。"
+    )
+    if warning_lines:
+        summary += "\n\n警告（全件）\n" + "\n".join(warning_lines)
+    return summary
+
+
+class MarkdownImportPreviewDialog(QDialog):
+    """Scrollable, copyable final confirmation for Markdown import."""
+
+    def __init__(
+        self,
+        plan: MarkdownImportPlan,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Markdown取込プレビュー")
+        self.setModal(True)
+        self.resize(900, 700)
+
+        heading = QLabel(
+            "新しいキャラクターシートを作成する前に、"
+            "取込内容と警告の全文を確認してください。"
+        )
+        heading.setWordWrap(True)
+
+        self.preview_text = QPlainTextEdit()
+        self.preview_text.setAccessibleName("Markdown取込内容の全文")
+        self.preview_text.setReadOnly(True)
+        self.preview_text.setPlainText(format_markdown_import_preview(plan))
+
+        self.confirm_button = QPushButton("この内容で新規作成")
+        self.confirm_button.setAutoDefault(False)
+        self.confirm_button.setDefault(False)
+        self.confirm_button.clicked.connect(self.accept)
+        self.cancel_button = QPushButton("キャンセル")
+        self.cancel_button.setAutoDefault(True)
+        self.cancel_button.setDefault(True)
+        self.cancel_button.clicked.connect(self.reject)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        buttons.addWidget(self.confirm_button)
+        buttons.addWidget(self.cancel_button)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(heading)
+        layout.addWidget(self.preview_text, 1)
+        layout.addLayout(buttons)
+        self.setTabOrder(self.preview_text, self.confirm_button)
+        self.setTabOrder(self.confirm_button, self.cancel_button)
+        self.cancel_button.setFocus()
 
 
 class MainWindow(QMainWindow):
@@ -572,16 +708,35 @@ class MainWindow(QMainWindow):
 
     def import_markdown_path(self, path: Path) -> bool:
         try:
-            plan = parse_character_markdown(
-                path.read_bytes(),
-                catalog=self.personality_catalog,
-            )
+            raw = path.read_bytes()
+            detection = detect_markdown_format(raw)
         except (OSError, MarkdownImportError) as exc:
             self._record_error(
                 title="Markdown読込エラー",
                 cause="Markdownを安全に解析できませんでした。",
                 impact="現在開いているシートと編集中の内容は保持されています。",
                 remedy="UTF-8のMarkdownか、別のファイルを選択してください。",
+                details=str(exc),
+            )
+            return False
+        allow_legacy = detection.kind in {
+            MarkdownFormatKind.LEGACY_MARKED_V1,
+            MarkdownFormatKind.LEGACY_UNMARKED,
+        }
+        if allow_legacy and not self._confirm_legacy_markdown_parse(detection):
+            return False
+        try:
+            plan = parse_character_markdown(
+                raw,
+                catalog=self.personality_catalog,
+                allow_legacy=allow_legacy,
+            )
+        except MarkdownImportError as exc:
+            self._record_error(
+                title="Markdown読込エラー",
+                cause="Markdownを安全に解析できませんでした。",
+                impact="現在開いているシートと編集中の内容は保持されています。",
+                remedy="形式表示とエラー内容を確認し、Markdownを修正してください。",
                 details=str(exc),
             )
             return False
@@ -720,33 +875,41 @@ class MainWindow(QMainWindow):
             messages or "取り込み可能な項目を確認できませんでした。",
         )
 
+    def _confirm_legacy_markdown_parse(
+        self,
+        detection: MarkdownFormatDetection,
+    ) -> bool:
+        format_label = (
+            "形式マーカー1付きの旧形式"
+            if detection.kind is MarkdownFormatKind.LEGACY_MARKED_V1
+            else "形式マーカーなしの旧形式"
+        )
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("旧形式Markdownを検出")
+        box.setText(
+            f"{format_label}を検出しました。\n\n"
+            "この時点では形式判定だけを行い、本文は解析していません。"
+        )
+        box.setInformativeText(
+            "旧形式では欠落項目が空欄またはEになり、画像と思い出は"
+            "復元されません。曖昧な構造はエラーになります。"
+        )
+        parse_button = box.addButton(
+            "旧形式として解析する",
+            QMessageBox.ButtonRole.AcceptRole,
+        )
+        cancel_button = box.addButton(
+            "キャンセル",
+            QMessageBox.ButtonRole.RejectRole,
+        )
+        box.setDefaultButton(cancel_button)
+        box.exec()
+        return box.clickedButton() is parse_button
+
     def _confirm_markdown_import(self, plan: MarkdownImportPlan) -> bool:
-        warning_lines = [
-            f"・{issue.message}"
-            for issue in plan.issues
-            if issue.severity == "warning"
-        ]
-        personality_count = len(plan.personalities)
-        summary = (
-            "次の内容で新しいキャラクターシートを作成します。\n\n"
-            f"名前: {plan.name or '（空欄）'}\n"
-            f"性格キーワード: {personality_count}件\n"
-            f"スキル: {len(plan.skills)}件\n\n"
-            "画像・思い出・内部IDは復元されません。"
-            "スキルはすべて新規オリジナルスキルになります。"
-        )
-        if plan.legacy_format:
-            summary += "\n旧形式Markdownのため、性格キーワードは枠1から順に配置します。"
-        if warning_lines:
-            summary += "\n\n警告\n" + "\n".join(warning_lines[:10])
-        result = QMessageBox.question(
-            self,
-            "Markdown取込プレビュー",
-            summary + "\n\nこの内容で新規作成しますか？",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        return result == QMessageBox.StandardButton.Yes
+        dialog = MarkdownImportPreviewDialog(plan, self)
+        return dialog.exec() == QDialog.DialogCode.Accepted
 
     def _open_profile_comparison(self) -> None:
         if self.sheet is not None:

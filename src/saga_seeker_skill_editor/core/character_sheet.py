@@ -5,8 +5,9 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass, field
 import html
-from typing import Any
 import json
+import re
+from typing import Any
 
 from saga_seeker_skill_editor.core.html_locator import (
     ElementSpan,
@@ -81,6 +82,7 @@ PROFILE_TABS = (
     ("talentsAndRole", "Special Skills & Role"),
     ("otherFeatures", "Other Traits"),
 )
+_PROFILE_BR_TAG = re.compile(r"<br(?: ?/)?>", re.IGNORECASE)
 STATUS_HTML_FIELDS = (
     ("strength", "Strength"),
     ("endurance", "Endurance"),
@@ -672,7 +674,11 @@ def render_character_sheet(sheet: CharacterSheet, draft: CharacterSheetDraft) ->
                 (
                     html_span.content_start,
                     html_span.content_end,
-                    html.escape(display_value, quote=False).encode("utf-8"),
+                    (
+                        _profile_text_to_html(display_value)
+                        if path[1] == "profile"
+                        else html.escape(display_value, quote=False)
+                    ).encode("utf-8"),
                 ),
             )
         )
@@ -1424,6 +1430,26 @@ def _plain_html_text(raw: bytes) -> str | None:
         return None
 
 
+def _normalize_profile_newlines(value: str) -> str:
+    return value.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _profile_text_to_html(value: str) -> str:
+    normalized = _normalize_profile_newlines(value)
+    return html.escape(normalized, quote=False).replace("\n", "<br>")
+
+
+def _profile_html_to_text(raw: bytes) -> str | None:
+    try:
+        decoded = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    with_breaks = _PROFILE_BR_TAG.sub("\n", decoded)
+    if "<" in with_breaks or ">" in with_breaks:
+        return None
+    return html.unescape(with_breaks)
+
+
 def _load_profile_html(
     raw_html: bytes,
     profile: object,
@@ -1451,8 +1477,17 @@ def _load_profile_html(
             )
         except HtmlStructureError as exc:
             return tuple(spans), raw_html[detail_span.start : detail_span.end], False, str(exc)
-        displayed = _plain_html_text(raw_html[span.content_start : span.content_end])
-        if displayed != value and not (value == "" and displayed in ("", "（未入力）")):
+        displayed = _profile_html_to_text(
+            raw_html[span.content_start : span.content_end]
+        )
+        values_match = (
+            displayed is not None
+            and _normalize_profile_newlines(displayed)
+            == _normalize_profile_newlines(value)
+        )
+        if not values_match and not (
+            value == "" and displayed in ("", "（未入力）")
+        ):
             return tuple(spans), raw_html[detail_span.start : detail_span.end], False, (
                 f"JSON and HTML profile values do not match for {key}"
             )

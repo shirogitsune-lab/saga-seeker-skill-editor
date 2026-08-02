@@ -19,6 +19,11 @@ Saga & SeekerのキャラクターシートHTMLを新規作成し、基本情報
 
 このアプリケーションはローカルファイルだけを処理し、ネットワーク通信を行いません。
 
+配布物にはオフラインで読める`使い方.html`と`user-guide-assets/`が含まれます。
+リポジトリ上の正本は
+[docs/user-guide/index.html](docs/user-guide/index.html)です。HTML本文と画像だけで
+完結し、CDN、Webフォント、JavaScript、外部画像を使用しません。
+
 ## 画面と操作
 
 PySide6による5タブ構成の画面です。
@@ -61,7 +66,9 @@ PySide6による5タブ構成の画面です。
 
 ## AI向けMarkdown
 
-「AI向けMarkdownを書き出す」は、現在の編集中ドラフトから次をUTF-8 Markdownへ出力します。
+「AI向けMarkdownを書き出す」は、現在の編集中ドラフトから次をUTF-8の
+**AI向けMarkdown形式 v2**へ出力します。これはアプリケーションバージョン
+`2.0.1`とは別の形式番号です。
 
 - キャラクター名、プロフィール7項目
 - 性格キーワードと表示順
@@ -71,11 +78,31 @@ PySide6による5タブ構成の画面です。
 
 画像、魅力、各種ID、内部のスキル種別・キー、空白保持枠、未使用スキル枠は出力しません。Markdown書出しはHTML保存ではないため、現在のHTML基準状態、保存先、未保存変更を更新しません。
 
-「Markdownから新規作成」は完全な逆変換ではありません。既知の見出しから、キャラクター名、プロフィール7項目、性格キーワード、6ステータス、最大6件のスキルだけを読み込みます。画像は既定値、魅力は`E`、思い出は空、新しいIDと日時を使用します。Markdownにあったスキルは、元の内部ID・種別を推測せず、すべて新しいオリジナルスキルとして作成します。
+AI向けMarkdown形式 v2では、見出し文字列と順序を固定しています。自由記述は
+`<!-- saga-seeker-text:start -->`と
+`<!-- saga-seeker-text:end -->`の間へ書きます。ブロック内の見出し、箇条書き、
+`（未入力）`はそのまま本文です。取込時のCRLF・単独CRは意味上のLFへ
+正規化されます。キャラクター名とスキル名だけは単一行です。
+
+「Markdownから新規作成」は完全な逆変換ではありません。キャラクター名、
+プロフィール7項目、性格キーワード、6ステータス、最大6件のスキルだけを
+読み込みます。画像は既定値、魅力は`E`、思い出は空、新しいIDと日時を使用
+します。Markdownにあったスキルは、元の内部ID・種別を推測せず、すべて
+新しいオリジナルスキルとして作成します。
+
+書き出した思い出セクションはAI参照用です。取込プレビューには検出件数を
+表示しますが、Markdownから新規作成しても思い出は復元されません。
 
 Markdownからの新規作成は開始画面だけでなく、HTMLまたは新規シートを開いた後の画面上部からも実行できます。同じ場所にある「Markdownを書き出す」は現在のシートからAI向けMarkdownを生成する別操作です。
 
-性格キーワードは同梱カタログとの完全一致が必要です。未知・重複・途中に空きのある枠、E～S以外のステータス、7件以上のスキル、既知見出しの重複は黙って補正せず、プレビューで停止します。HTMLやスクリプトは実行せず、UTF-8・8 MiB以下のMarkdownだけを固定見出しとして解析します。
+形式マーカー1付きまたはマーカーなしの旧形式は、形式判定だけを先に行います。
+「旧形式として解析する」を選択するまで本文を解析しません。欠落項目は警告、
+複数の解釈が可能なスキル、未知のH2/H3見出しはエラーとして区別します。
+
+性格キーワードは同梱カタログとの完全一致が必要です。未知・重複・途中に
+空きのある枠、E～S以外のステータス、7件以上のスキル、固定見出しの欠落・
+重複・順序違反は黙って補正せず停止します。HTMLやスクリプトは実行せず、
+UTF-8・8 MiB以下のMarkdownだけを解析します。
 
 ## 安全仕様
 
@@ -145,11 +172,24 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onedir
 powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onefile
 ```
 
+ビルド用Pythonは、`-PythonPath`、リポジトリの`.venv`、Windows Python
+Launcherの既定Python 3（`py -3`）、PATHの`python`の順で探し、見つかった
+Pythonが3.11以上であることを検証します。固定した上限はなく、3.14以降も対象です。
+明示指定する場合は、例えば
+`powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onedir -PythonPath C:\Python312\python.exe`
+と実行します。
+
 ## ビルドについて
 
 元のWebPアイコンは`assets/カナリア.webp`にあります。パッケージ作成前に`scripts/convert_icon.py`を実行すると、`assets/kanaria.ico`を生成します。
 
 `SagaSeekerSkillEditor.spec`はEXEアイコンを設定し、onefile版へ`gui/styles/*.qss`、性格キーワードカタログ、新規シート用の既定WebP画像を同梱します。ビルドスクリプトはonedir版にも同じリソースを含めます。PyInstallerのonefile実行時に使用される`_MEIPASS`を含め、リソースパスの解決は一か所へ集約しています。
+
+ビルドスクリプトは成功後、正本HTMLを本文変更なしで`使い方.html`へコピーし、
+20枚の正式画像を`user-guide-assets/`へコピーします。onedirでは実行ファイルと
+同じディレクトリ、onefileでは`dist/`直下が配布先です。正式画像の再生成条件と
+匿名性監査は`docs/user-guide/SCREENSHOT_WORKFLOW.md`および
+`docs/user-guide/SCREENSHOT_AUDIT.md`に記録しています。
 
 両形式の画像プラグイン回帰は次で確認できます。
 

@@ -98,6 +98,23 @@ def _profile_sheet_bytes() -> bytes:
     ).encode("utf-8")
 
 
+def _profile_sheet_with_basic_settings(
+    *,
+    json_value: str,
+    html_value: str,
+) -> bytes:
+    raw = _profile_sheet_bytes()
+    return raw.replace(
+        b'"basicSettings": "basicSettings-original"',
+        b'"basicSettings": ' + json.dumps(json_value, ensure_ascii=False).encode("utf-8"),
+    ).replace(
+        b'data-tab-key="Basic Settings">basicSettings-original</div>',
+        b'data-tab-key="Basic Settings">'
+        + html_value.encode("utf-8")
+        + b"</div>",
+    )
+
+
 def _status_sheet_bytes() -> bytes:
     status = {
         "strength": "E",
@@ -442,6 +459,66 @@ def test_profile_edit_patches_only_one_json_token_and_matching_html_content() ->
         b'data-tab-key="Basic Settings">&lt;/script&gt;&amp; changed</div>',
         b'data-tab-key="Basic Settings">basicSettings-original</div>',
     ) == raw
+
+
+@pytest.mark.parametrize("break_tag", ["<br>", "<br/>", "<br />", "<BR>"])
+def test_profile_load_treats_supported_br_tags_as_semantic_newlines(
+    break_tag: str,
+) -> None:
+    raw = _profile_sheet_with_basic_settings(
+        json_value="first\r\nsecond\rthird",
+        html_value=f"first{break_tag}second{break_tag}third",
+    )
+
+    sheet = load_character_sheet(raw)
+    draft = CharacterSheetDraft.from_sheet(sheet)
+
+    assert sheet.diagnostic_baseline.for_section("profile").editable is True
+    assert sheet.raw_html is raw
+    assert draft.has_changes is False
+    assert render_character_sheet(sheet, draft) is raw
+
+
+@pytest.mark.parametrize(
+    "html_value",
+    [
+        "first<br >second",
+        "first<br class=\"unexpected\">second",
+        "first<strong>second</strong>",
+        "first<!-- unexpected -->second",
+    ],
+)
+def test_profile_load_rejects_markup_other_than_supported_br_tags(
+    html_value: str,
+) -> None:
+    raw = _profile_sheet_with_basic_settings(
+        json_value="first\nsecond",
+        html_value=html_value,
+    )
+
+    sheet = load_character_sheet(raw)
+
+    assert sheet.diagnostic_baseline.for_section("profile").editable is False
+
+
+def test_profile_edit_preserves_json_newlines_and_renders_semantic_html_breaks() -> None:
+    raw = _profile_sheet_bytes()
+    sheet = load_character_sheet(raw)
+    draft = CharacterSheetDraft.from_sheet(sheet)
+
+    draft.set_profile("basicSettings", "first\r\nsecond\rthird<&")
+    rendered = render_character_sheet(sheet, draft)
+    reloaded = load_character_sheet(rendered)
+
+    assert (
+        reloaded.data["data"]["profile"]["basicSettings"]
+        == "first\r\nsecond\rthird<&"
+    )
+    assert (
+        b'data-tab-key="Basic Settings">'
+        b"first<br>second<br>third&lt;&amp;</div>"
+    ) in rendered
+    assert reloaded.diagnostic_baseline.for_section("profile").editable is True
 
 
 def test_status_edit_updates_json_rank_and_exactly_six_gauge_segments() -> None:

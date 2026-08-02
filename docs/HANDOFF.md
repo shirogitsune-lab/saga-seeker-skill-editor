@@ -6,18 +6,18 @@ Read `AGENTS.md` and `CONTEXT.md` first, then inspect the ADRs linked below.
 ## Baseline
 
 - Product: Saga & Seeker Skill Editor
-- Application version: `2.0.0` (implemented locally; not committed or released)
-- Public release: `v1.2.0`
-- Release tag commit: `8dd3fb4c0ab300b58d8558871a0d39b6eadc4328`
+- Application version: `2.0.1`
+- Public release: `v2.0.0`
+- Release tag commit: `87387cbece195911554473d7db3b71556862c2a5`
 - Repository: `https://github.com/shirogitsune-lab/saga-seeker-skill-editor`
 - Default branch: `main`
 - License: MIT for the source code, bundled canary artwork, and distributions
 - Platform: Windows 10/11 desktop
 - Runtime: Python 3.11+ and PySide6; packaged users do not need Python
 
-The local worktree now contains the accepted `v2.0.0` implementation on top of
-the public `v1.2.0` baseline. No commit, push, tag, GitHub issue, or release has
-been created.
+The public `v2.0.0` tag is the baseline for the current local repair branches.
+The repairs are local stacked branches; they have not been pushed, merged,
+tagged, or released.
 
 ## Product Purpose
 
@@ -85,23 +85,36 @@ The original input file is not an in-place editing target. Safety and preservati
 
 ### Markdown Interchange
 
+- Writes canonical AI-oriented Markdown format v2. Application version
+  `2.0.1` and format version `2` are separate identifiers.
 - Exports the current rendered draft in-process; it does not launch or depend
   on the standalone Rust converter executable.
 - Preserves the standalone converter's important semantic output, including
   descriptions for valid skills whose internal type is empty.
 - Adds all normal memories, including JSON-only positions seven onward, to the
   AI-oriented export. Placeholder memories and internal IDs are omitted.
-- Imports only fixed known headings from UTF-8 Markdown up to 8 MiB and never
-  interprets embedded HTML.
+- Uses fixed H1–H4 structure and opaque text blocks, so headings, bullets, and
+  empty-marker-looking text inside free prose cannot alter document structure.
+- Lexically distinguishes canonical v2, marked v1, unmarked legacy, invalid
+  marker position, unknown version, duplicate, mixed, and malformed blocks.
+- Requires explicit `旧形式として解析する` consent before interpreting marked
+  v1 or unmarked legacy content.
+- Rejects unknown structural legacy H2 headings and validates every legacy H3
+  against its owning H2. Profile H3 is limited to the official seven fields;
+  skill and memory H3 remain supported, while H3 under name, personality, or
+  status is a blocking error instead of becoming field text.
+- Imports UTF-8 Markdown up to 8 MiB and never interprets embedded HTML.
 - Creates a new sheet with the default icon, `charm == "E"`, no memories, and
   newly generated identity/timestamp metadata.
 - Creates imported skills as new original skills with sequential `skN` IDs and
   empty `type`/`key`; protected default identity is never inferred.
 - Requires exact catalog personality names and blocks unknown, duplicate,
   sparse, or over-limit input instead of silently repairing it.
-- Shows a preview and warnings before replacement. Parse errors, validation
+- Shows every value, every warning, and every non-restored field in a
+  scrollable, selectable preview before replacement. Parse errors, validation
   errors, preview cancellation, and generation failure retain the current
   sheet and draft.
+- Reports detected memories separately and never restores them.
 
 ## Safety Contract
 
@@ -132,6 +145,25 @@ See:
 - [ADR 0006: Separate public and private fixtures](adr/0006-separate-public-and-private-fixtures.md)
 - [ADR 0007: Define the v2 character-sheet contract](adr/0007-define-the-v2-character-sheet-contract.md)
 - [ADR 0008: Add lossy Markdown interchange and shared profile comparison](adr/0008-add-lossy-markdown-interchange-and-profile-comparison.md)
+- [ADR 0009: Treat profile `<br>` as semantic newlines](adr/0009-treat-profile-br-as-semantic-newlines.md)
+- [ADR 0010: Define AI-oriented Markdown format v2](adr/0010-define-ai-markdown-format-v2.md)
+- [ADR 0011: Package an offline HTML user guide](adr/0011-package-an-offline-html-user-guide.md)
+
+### Offline User Guide
+
+- Canonical source: `docs/user-guide/index.html`
+- Formal images: `docs/user-guide/user-guide-assets/*.png` (exactly 20)
+- Regeneration procedure: `docs/user-guide/SCREENSHOT_WORKFLOW.md`
+- Actual visual anonymity audit: `docs/user-guide/SCREENSHOT_AUDIT.md`
+- Distribution copy: byte-identical `使い方.html` plus `user-guide-assets/`
+- Automated `offscreen` inspection and formal Windows Qt capture are separate.
+- Formal images use anonymous synthetic dataset `ANON-GUIDE-001`, a fixed
+  1440×900 widget capture, Windows normal Qt, 100% scale, and Fusion style.
+- Screenshot generation stages and fully decodes the exact 20 PNG files before
+  replacing the old set; a failed publish restores the old set.
+- `scripts/package_user_guide.py` rejects canonical-source path overlaps,
+  transactionally replaces the destination HTML/assets, removes stale images,
+  and produces idempotent copies. `build.ps1` invokes it after both build modes.
 
 ## v2.0.0 Character-Sheet Editing
 
@@ -238,7 +270,7 @@ The byte-preserving model, GUI, and save workflow are implemented:
 - Save validation compares every load-time read-only section's JSON bytes,
   HTML bytes, diagnostic codes, severity, counts, correspondence, and reason.
   Editable sections must remain valid after rendering.
-- The package metadata is `2.0.0`; the GUI title is
+- The package metadata is `2.0.1`; the GUI title is
   `Saga & Seeker キャラクターシートエディター`. Executable, repository, and
   Python-package names remain unchanged.
 - PyInstaller onedir and onefile definitions include the default WebP. The
@@ -283,20 +315,30 @@ Public suite:
 uv run pytest -q --basetemp=work\pytest-handoff -o cache_dir=work\.pytest-handoff-cache
 ```
 
-The most recent local v2 verification recorded:
+The most recent local re-review verification recorded:
 
-- Public run without private fixtures: `172 passed, 5 skipped`.
-- Configured private real-sheet integration: `5 passed`; the anonymous corpus
-  summary loaded all 150 valid character-sheet scripts and rejected the one
-  HTML without a character-sheet JSON script.
-- Read-only parsing of all 151 existing standalone-converter Markdown outputs
-  accepted 149 as new-sheet candidates. Two were intentionally blocked: one
-  exceeded the six-skill limit and one repeated a recognized profile heading.
-- onefile and onedir builds completed.
+- Public run without private fixtures: `256 passed, 5 skipped`.
+- Focused Markdown interchange and GUI workflow run: `66 passed`.
+- Focused user-guide and build-Python resolution run: `19 passed`.
+- The private real-sheet integration was not rerun for this legacy-Markdown-only
+  change. Its previous result remains `5 passed`; no private path, filename,
+  sheet content, or character identifier was recorded.
+- Read-only parsing of the 175 standalone-converter Markdown outputs currently
+  present classified all 175 as `LEGACY_UNMARKED` and refused all 175 before
+  explicit legacy permission. After permission, 172 were valid new-sheet
+  candidates and 3 were intentionally blocked by ambiguity or validation
+  errors. The preview detected 70 memory entries across 15 files, while import
+  still restored no memories. Source hashes were unchanged and no parse
+  exception occurred.
+- onefile and onedir builds completed after each build's internal public test
+  run also reported `256 passed, 5 skipped`.
 - Both executable forms passed PNG/JPEG decode, square crop, WebP encode, WebP
   reload, and packaged default-WebP resolution.
 - Both executable forms launched successfully with light, dark, and
   high-contrast themes.
+- The 20 formal guide screenshots were not regenerated because this remediation
+  did not change their UI states or pixels; the existing screenshot audit and
+  guide validation remain applicable.
 
 Pytest's default Windows temp or cache directory may be inaccessible on some machines. Keep `--basetemp` and `cache_dir` under ignored `work/`, or use `build.ps1`, which already does this.
 
@@ -316,8 +358,14 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onedir
 powershell -ExecutionPolicy Bypass -File .\build.ps1 -Mode onefile
 ```
 
+`build.ps1` resolves Python 3.11+ in this order: explicit `-PythonPath`, local
+`.venv`, the Windows Python Launcher's default Python 3 (`py -3`), then PATH
+`python`. Every candidate is version-checked, there is no fixed upper version,
+and there is no machine-specific installation path fallback.
+
 - onedir output: `dist/SagaSeekerSkillEditor/`
 - onefile output: `dist/SagaSeekerSkillEditor.exe`
+- Both outputs include byte-identical `使い方.html` and `user-guide-assets/`.
 - `Pillow` is used only to convert the icon before packaging and is excluded from the onefile bundle.
 - QSS, the icon, and the personality catalog must work in source, onedir, and onefile execution.
 - Release assets should include a versioned onefile EXE, a versioned onedir ZIP, and `SHA256SUMS.txt`.
@@ -345,10 +393,10 @@ The game-derived names and classification data in `data/personality_keywords.csv
 
 ## Current Maintenance State
 
-- The accepted v2.0.0 feature, profile comparison, and Markdown interchange are
-  implemented locally. The latest public and private suites pass. Both onedir
-  and onefile were rebuilt after the Markdown/UI additions and passed the
-  packaged image pipeline plus light, dark, and high-contrast GUI smoke.
+- The public v2.0.0 feature and profile comparison are the repair baseline.
+  Three local stacked repair branches add profile `<br>` compatibility,
+  AI-oriented Markdown format v2, and the packaged offline HTML guide.
+  They have not been pushed, merged, tagged, or released.
 - Use GitHub Issues for the next feature request or defect before substantial implementation.
 - `core/invariant_segments.py` exists, but the production save path does not currently call it. Byte preservation is provided by targeted replacements and focused tests. Before claiming universal runtime invariant-segment validation, either integrate the helper into the render/save path with tests or narrow the README statement.
 - The release announcement presented v1.2.0 as the first advertised update after v1.0.0; v1.1.0 existed publicly but was not separately advertised.

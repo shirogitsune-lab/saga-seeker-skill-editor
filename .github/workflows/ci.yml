@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  public-tests:
+    name: Public tests (Python ${{ matrix.python-version }})
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.13"
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install public test dependencies
+        run: python -m pip install --disable-pip-version-check -e ".[dev,build]"
+
+      - name: Run complete public test suite
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path work | Out-Null
+          python -m pytest -q -p no:cacheprovider `
+            --basetemp="work/pytest-${{ matrix.python-version }}" `
+            --junitxml="work/pytest-${{ matrix.python-version }}.xml"
+
+      - name: Publish test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-python-${{ matrix.python-version }}
+          path: work/pytest-${{ matrix.python-version }}.xml
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-builds:
+    name: Windows onedir and onefile builds
+    needs: public-tests
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install build dependencies
+        run: python -m pip install --disable-pip-version-check -e ".[dev,build]"
+
+      - name: Build and verify onedir
+        shell: pwsh
+        run: |
+          ./build.ps1 -Mode onedir -PythonPath (Get-Command python).Source
+          if (-not (Test-Path "dist/SagaSeekerSkillEditor/SagaSeekerSkillEditor.exe")) {
+            throw "onedir executable is missing"
+          }
+          $guides = Get-ChildItem "dist/SagaSeekerSkillEditor" -Filter *.html
+          if ($guides.Count -ne 1) {
+            throw "onedir distribution must contain exactly one HTML guide"
+          }
+          $images = Get-ChildItem "dist/SagaSeekerSkillEditor/user-guide-assets" -Filter *.png
+          if ($images.Count -ne 20) {
+            throw "onedir guide must contain exactly 20 PNG files"
+          }
+
+      - name: Build and verify onefile
+        shell: pwsh
+        run: |
+          ./build.ps1 -Mode onefile -PythonPath (Get-Command python).Source
+          if (-not (Test-Path "dist/SagaSeekerSkillEditor.exe")) {
+            throw "onefile executable is missing"
+          }
+          $guides = Get-ChildItem "dist" -Filter *.html
+          if ($guides.Count -ne 1) {
+            throw "onefile distribution must contain exactly one HTML guide"
+          }
+          $images = Get-ChildItem "dist/user-guide-assets" -Filter *.png
+          if ($images.Count -ne 20) {
+            throw "onefile guide must contain exactly 20 PNG files"
+          }
+
+      - name: Write verification summary
+        if: success()
+        shell: pwsh
+        run: |
+          "## CI verification" >> $env:GITHUB_STEP_SUMMARY
+          "- Public tests passed on Python 3.11 and 3.13." >> $env:GITHUB_STEP_SUMMARY
+          "- Windows onedir and onefile builds completed." >> $env:GITHUB_STEP_SUMMARY
+          "- Both distributions contain the offline guide and exactly 20 PNG assets." >> $env:GITHUB_STEP_SUMMARY

@@ -116,7 +116,7 @@ def test_canonical_guide_is_offline_semantic_and_references_exact_assets() -> No
         assert not image["src"].startswith(("/", "\\"))
         assert (GUIDE_DIR / image["src"]).is_file()
 
-    assert "アプリケーションバージョン 2.0.0" in text
+    assert "アプリケーションバージョン 2.0.1" in text
     assert "AI向けMarkdown形式 v2" in text
     assert "復元されません" in text
 

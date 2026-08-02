@@ -6,7 +6,7 @@ Read `AGENTS.md` and `CONTEXT.md` first, then inspect the ADRs linked below.
 ## Baseline
 
 - Product: Saga & Seeker Skill Editor
-- Application version: `2.0.0`
+- Application version: `2.0.1`
 - Public release: `v2.0.0`
 - Release tag commit: `87387cbece195911554473d7db3b71556862c2a5`
 - Repository: `https://github.com/shirogitsune-lab/saga-seeker-skill-editor`
@@ -86,7 +86,7 @@ The original input file is not an in-place editing target. Safety and preservati
 ### Markdown Interchange
 
 - Writes canonical AI-oriented Markdown format v2. Application version
-  `2.0.0` and format version `2` are separate identifiers.
+  `2.0.1` and format version `2` are separate identifiers.
 - Exports the current rendered draft in-process; it does not launch or depend
   on the standalone Rust converter executable.
 - Preserves the standalone converter's important semantic output, including
@@ -270,7 +270,7 @@ The byte-preserving model, GUI, and save workflow are implemented:
 - Save validation compares every load-time read-only section's JSON bytes,
   HTML bytes, diagnostic codes, severity, counts, correspondence, and reason.
   Editable sections must remain valid after rendering.
-- The package metadata is `2.0.0`; the GUI title is
+- The package metadata is `2.0.1`; the GUI title is
   `Saga & Seeker キャラクターシートエディター`. Executable, repository, and
   Python-package names remain unchanged.
 - PyInstaller onedir and onefile definitions include the default WebP. The

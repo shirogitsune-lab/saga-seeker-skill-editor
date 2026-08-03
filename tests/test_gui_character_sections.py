@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timedelta, timezone
 import os
 from uuid import UUID
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QByteArray, QBuffer, QIODevice, Qt
 from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QKeySequence
+from PySide6.QtGui import QColor, QImage, QKeySequence
 
 from saga_seeker_skill_editor.core.character_sheet import (
     CharacterSheetDraft,
@@ -22,6 +23,9 @@ from saga_seeker_skill_editor.gui.character_details_widget import (
 )
 from saga_seeker_skill_editor.gui.memory_editor_widget import MemoryEditorWidget
 from saga_seeker_skill_editor.gui.status_editor_widget import StatusEditorWidget
+from saga_seeker_skill_editor.gui.vacant_slot_editor_widget import (
+    VacantSlotEditorWidget,
+)
 
 
 def _app() -> QApplication:
@@ -48,6 +52,72 @@ def _generation() -> GenerationInputs:
 def _blank_sheet():
     return load_character_sheet(
         create_character_sheet(icon_webp=b"synthetic-webp", generation=_generation())
+    )
+
+
+def _png_icon(color: str = "#6b7280") -> bytes:
+    image = QImage(2, 2, QImage.Format.Format_RGB32)
+    image.fill(QColor(color))
+    output = QByteArray()
+    buffer = QBuffer(output)
+    assert buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    assert image.save(buffer, "PNG")
+    buffer.close()
+    return bytes(output)
+
+
+def _sheet_with_icon(icon_bytes: bytes):
+    return load_character_sheet(
+        create_character_sheet(icon_webp=icon_bytes, generation=_generation())
+    )
+
+
+def _sheet_without_icon():
+    raw = create_character_sheet(
+        icon_webp=_png_icon(),
+        generation=_generation(),
+    )
+    return load_character_sheet(
+        raw.replace(
+            b'"icon": {',
+            b'"icon": null,\n    "removedIconFixture": {',
+            1,
+        )
+    )
+
+
+def _sheet_with_read_only_valid_icon():
+    raw = create_character_sheet(
+        icon_webp=_png_icon(),
+        generation=_generation(),
+    )
+    return load_character_sheet(
+        raw.replace(
+            b"data:image/webp;base64,",
+            b"data:image/png;base64,",
+            1,
+        )
+    )
+
+
+def _sheet_with_corrupt_base64():
+    icon = _png_icon()
+    raw = create_character_sheet(icon_webp=icon, generation=_generation())
+    return load_character_sheet(
+        raw.replace(base64.b64encode(icon), b"%%%")
+    )
+
+
+def _sheet_with_invalid_icon_uri():
+    raw = create_character_sheet(
+        icon_webp=_png_icon(),
+        generation=_generation(),
+    )
+    return load_character_sheet(
+        raw.replace(
+            b"data:image/webp;base64,",
+            b"invalid:image;base64,",
+        )
     )
 
 
@@ -81,6 +151,117 @@ def test_basic_info_display_does_not_write_qt_newline_conversion_to_draft() -> N
     assert not draft.has_changes
     assert render_character_sheet(sheet, draft) is sheet.raw_html
     assert "15 / 1000" in widget.profile_counters["basicSettings"].text()
+
+
+def test_set_sheet_automatically_displays_embedded_icon_without_button_click() -> None:
+    _app()
+    sheet = _sheet_with_icon(_png_icon())
+    draft = CharacterSheetDraft.from_sheet(sheet)
+    widget = CharacterDetailsWidget()
+
+    widget.set_sheet(sheet, draft)
+
+    assert widget.preview_button.text() == "プレビューを再読込"
+    assert widget.icon_preview.text() == ""
+    assert not widget.icon_preview.pixmap().isNull()
+    assert not draft.has_changes
+
+
+def test_set_sheet_clears_previous_icon_before_showing_missing_icon_guidance() -> None:
+    _app()
+    first = _sheet_with_icon(_png_icon())
+    second = _sheet_without_icon()
+    widget = CharacterDetailsWidget()
+    widget.set_sheet(first, CharacterSheetDraft.from_sheet(first))
+    assert not widget.icon_preview.pixmap().isNull()
+
+    widget.set_sheet(second, CharacterSheetDraft.from_sheet(second))
+
+    assert widget.icon_preview.pixmap().isNull()
+    assert widget.icon_preview.text() == "埋込画像はありません"
+
+
+def test_corrupt_or_invalid_embedded_icon_does_not_raise_or_leave_a_pixmap() -> None:
+    _app()
+    sheets = (
+        _sheet_with_corrupt_base64(),
+        _sheet_with_icon(b"not an image"),
+        _sheet_with_invalid_icon_uri(),
+    )
+
+    for sheet in sheets:
+        widget = CharacterDetailsWidget()
+        widget.set_sheet(sheet, CharacterSheetDraft.from_sheet(sheet))
+        assert widget.icon_preview.pixmap().isNull()
+        assert widget.icon_preview.text().startswith("プレビューできません\n")
+
+
+def test_read_only_icon_section_still_automatically_displays_valid_icon() -> None:
+    _app()
+    sheet = _sheet_with_read_only_valid_icon()
+    widget = CharacterDetailsWidget()
+
+    widget.set_sheet(sheet, CharacterSheetDraft.from_sheet(sheet))
+
+    assert not sheet.diagnostic_baseline.for_section("icon").editable
+    assert not widget.replace_icon_button.isEnabled()
+    assert widget.icon_preview.text() == ""
+    assert not widget.icon_preview.pixmap().isNull()
+
+
+def test_manual_icon_reload_reuses_safe_error_handling() -> None:
+    _app()
+    sheet = _sheet_with_icon(_png_icon())
+    widget = CharacterDetailsWidget()
+    widget.set_sheet(sheet, CharacterSheetDraft.from_sheet(sheet))
+    sheet.data["data"]["icon"]["dataUri"] = "invalid:image;base64,%%%"
+
+    widget.preview_button.click()
+
+    assert widget.icon_preview.pixmap().isNull()
+    assert widget.icon_preview.text().startswith("プレビューできません\n")
+
+
+def test_replacement_icon_preview_remains_immediate() -> None:
+    _app()
+    sheet = _sheet_with_icon(_png_icon("#6b7280"))
+    widget = CharacterDetailsWidget()
+    widget.set_sheet(sheet, CharacterSheetDraft.from_sheet(sheet))
+    original_key = widget.icon_preview.pixmap().cacheKey()
+
+    widget.set_replacement_preview(_png_icon("#ef4444"))
+
+    assert widget.icon_preview.text() == ""
+    assert not widget.icon_preview.pixmap().isNull()
+    assert widget.icon_preview.pixmap().cacheKey() != original_key
+
+
+def test_corrupt_icon_does_not_block_load_or_disable_other_editors() -> None:
+    _app()
+    sheet = _sheet_with_icon(b"not an image")
+    draft = CharacterSheetDraft.from_sheet(sheet)
+    details = CharacterDetailsWidget()
+    statuses = StatusEditorWidget()
+    memories = MemoryEditorWidget(_generation)
+    skill_section = sheet.diagnostic_baseline.for_section("skills")
+    vacant_skill = VacantSlotEditorWidget(
+        0,
+        creation_enabled=skill_section.editable,
+        read_only_reason=(
+            None if skill_section.editable else skill_section.read_only_reason
+        ),
+    )
+
+    details.set_sheet(sheet, draft)
+    statuses.set_sheet(sheet, draft)
+    memories.set_sheet(sheet, draft)
+
+    assert details.icon_preview.text().startswith("プレビューできません\n")
+    assert not details.name_edit.isReadOnly()
+    assert all(not edit.isReadOnly() for edit in details.profile_edits.values())
+    assert all(box.isEnabled() for box in statuses.rank_boxes.values())
+    assert vacant_skill.name_edit.isEnabled()
+    assert memories.add_button.isEnabled()
 
 
 def test_basic_info_and_status_controls_update_only_explicit_fields() -> None:

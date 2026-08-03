@@ -1,4 +1,4 @@
-"""Copy the canonical offline user guide into a distribution directory."""
+"""Build the self-contained user guide in a distribution directory."""
 
 from __future__ import annotations
 
@@ -8,12 +8,17 @@ import shutil
 import tempfile
 
 try:
+    from standalone_user_guide import StandaloneGuideError, generate_standalone_user_guide
     from user_guide_artifacts import (
         GuideArtifactError,
         publish_entries_atomically,
         validate_screenshot_directory,
     )
-except ModuleNotFoundError:  # Imported as scripts.package_user_guide in tests/tools.
+except ModuleNotFoundError:  # Imported as scripts.package_user_guide.
+    from scripts.standalone_user_guide import (
+        StandaloneGuideError,
+        generate_standalone_user_guide,
+    )
     from scripts.user_guide_artifacts import (
         GuideArtifactError,
         publish_entries_atomically,
@@ -29,44 +34,39 @@ DISTRIBUTED_HTML_NAME = "使い方.html"
 
 
 class UserGuidePackagingError(RuntimeError):
-    """Raised when the canonical guide cannot be copied safely."""
+    """Raised when the canonical guide cannot be packaged safely."""
 
 
-def package_user_guide(destination: Path) -> tuple[Path, Path]:
-    """Copy exact guide bytes and replace only its dedicated asset directory."""
+def package_user_guide(destination: Path) -> Path:
+    """Atomically publish one self-contained guide and remove stale assets."""
 
     destination = destination.resolve()
     canonical_dir = CANONICAL_DIR.resolve()
     canonical_html = CANONICAL_HTML.resolve()
     canonical_assets = CANONICAL_ASSETS.resolve()
     distributed_html = destination / DISTRIBUTED_HTML_NAME
-    distributed_assets = destination / CANONICAL_ASSETS.name
     if _paths_overlap(destination, canonical_dir):
         raise UserGuidePackagingError(
-            "正本ディレクトリまたはその親子を配布先にできません"
+            "The canonical guide directory and distribution must not overlap"
         )
-    if any(
-        _paths_overlap(target, source)
-        for target in (distributed_html, distributed_assets)
-        for source in (canonical_html, canonical_assets)
-    ):
-        raise UserGuidePackagingError("配布先が正本HTMLまたは正本画像と重なります")
-    if not CANONICAL_HTML.is_file():
-        raise UserGuidePackagingError(f"正本HTMLがありません: {CANONICAL_HTML}")
-    if not CANONICAL_ASSETS.is_dir():
+    if _paths_overlap(distributed_html, canonical_html):
+        raise UserGuidePackagingError("Distribution must not replace canonical HTML")
+    if not canonical_html.is_file():
+        raise UserGuidePackagingError(f"Canonical HTML does not exist: {canonical_html}")
+    if not canonical_assets.is_dir():
         raise UserGuidePackagingError(
-            f"正本画像ディレクトリがありません: {CANONICAL_ASSETS}"
+            f"Canonical asset directory does not exist: {canonical_assets}"
         )
 
-    png_sources = sorted(CANONICAL_ASSETS.glob("*.png"))
+    png_sources = sorted(canonical_assets.glob("*.png"))
     if len(png_sources) != 20:
         raise UserGuidePackagingError(
-            f"正式スクリーンショットは20枚必要です（現在 {len(png_sources)} 枚）"
+            f"Exactly 20 canonical screenshots are required; found {len(png_sources)}"
         )
     expected_names = tuple(source.name for source in png_sources)
     try:
         validate_screenshot_directory(
-            CANONICAL_ASSETS,
+            canonical_assets,
             expected_names=expected_names,
             expected_size=(1440, 900),
         )
@@ -79,28 +79,24 @@ def package_user_guide(destination: Path) -> tuple[Path, Path]:
     )
     try:
         staged_html = staged_root / DISTRIBUTED_HTML_NAME
-        staged_assets = staged_root / CANONICAL_ASSETS.name
-        staged_html.write_bytes(CANONICAL_HTML.read_bytes())
-        staged_assets.mkdir()
-        for source in png_sources:
-            (staged_assets / source.name).write_bytes(source.read_bytes())
-        validate_screenshot_directory(
-            staged_assets,
-            expected_names=expected_names,
-            expected_size=(1440, 900),
+        generate_standalone_user_guide(
+            canonical_html,
+            canonical_assets,
+            staged_html,
         )
         publish_entries_atomically(
             staged_root,
             destination,
-            entry_names=(DISTRIBUTED_HTML_NAME, CANONICAL_ASSETS.name),
+            entry_names=(DISTRIBUTED_HTML_NAME,),
+            remove_names=(CANONICAL_ASSETS.name,),
         )
-    except (OSError, GuideArtifactError) as exc:
+    except (OSError, GuideArtifactError, StandaloneGuideError) as exc:
         raise UserGuidePackagingError(str(exc)) from exc
     finally:
         if staged_root.exists():
             shutil.rmtree(staged_root)
 
-    return distributed_html, distributed_assets
+    return distributed_html
 
 
 def _paths_overlap(first: Path, second: Path) -> bool:
@@ -113,9 +109,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("destination", type=Path)
     args = parser.parse_args()
-    html_path, assets_path = package_user_guide(args.destination)
+    html_path = package_user_guide(args.destination)
     print(f"HTML guide: {html_path}")
-    print(f"Assets: {assets_path}")
     return 0
 
 

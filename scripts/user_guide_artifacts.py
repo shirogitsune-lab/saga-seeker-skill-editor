@@ -109,13 +109,22 @@ def publish_entries_atomically(
     destination: Path,
     *,
     entry_names: Iterable[str],
+    remove_names: Iterable[str] = (),
     replace_operation: ReplaceOperation = os.replace,
 ) -> None:
-    """Publish several sibling entries as one rollback-capable transaction."""
+    """Publish entries and remove obsolete siblings as one transaction."""
 
     staged_root = staged_root.resolve()
     destination = destination.resolve()
     names = tuple(entry_names)
+    obsolete = tuple(remove_names)
+    managed_names = names + obsolete
+    if (
+        not names
+        or len(set(managed_names)) != len(managed_names)
+        or any(Path(name).name != name for name in managed_names)
+    ):
+        raise GuideArtifactError("Distribution entry names are invalid")
     if not staged_root.is_dir() or any(
         not (staged_root / name).exists() for name in names
     ):
@@ -127,7 +136,7 @@ def publish_entries_atomically(
     moved_old: list[str] = []
     placed_new: list[str] = []
     try:
-        for name in names:
+        for name in managed_names:
             target = destination / name
             if target.exists():
                 os.replace(target, backup_root / name)

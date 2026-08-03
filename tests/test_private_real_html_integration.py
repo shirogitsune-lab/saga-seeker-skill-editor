@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import hashlib
 import os
+from collections.abc import Callable
+from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
 
-from saga_seeker_skill_editor.core.character_sheet import CharacterSheetError, load_character_sheet
+from saga_seeker_skill_editor.core.character_sheet import (
+    CharacterSheet,
+    CharacterSheetError,
+    load_character_sheet,
+)
 from saga_seeker_skill_editor.core.file_writer import atomic_save_bytes
 from saga_seeker_skill_editor.core.personality_catalog import load_personality_catalog
 from saga_seeker_skill_editor.core.personality_editor import render_personality_selections
@@ -18,90 +25,132 @@ from saga_seeker_skill_editor.core.sheet_editor import (
 from saga_seeker_skill_editor.core.skill_classifier import SkillKind
 
 
-def _real_input_dir() -> Path:
+_PRIVATE_FIXTURE_SKIP_REASON = "private integration fixtures are not available"
+_PRIVATE_SCENARIO_SKIP_REASON = "private integration scenario is not available"
+pytestmark = pytest.mark.private_integration
+
+
+@dataclass(frozen=True, repr=False)
+class _AnonymousFixture:
+    raw: bytes
+    sheet: CharacterSheet
+
+
+@dataclass(frozen=True, repr=False)
+class _AnonymousSurvey:
+    total_count: int
+    rejected_count: int
+    fixtures: tuple[_AnonymousFixture, ...]
+
+
+def _private_input_dir() -> Path:
     configured = os.environ.get("SAGA_SEEKER_PRIVATE_FIXTURES")
     if configured:
         return Path(configured)
     return Path(__file__).parent / "private_fixtures"
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def test_known_real_sheets_load_without_editing_original_files() -> None:
-    input_dir = _real_input_dir()
-    if not input_dir.exists():
-        pytest.skip("local private real HTML input directory is not available")
-
-    targets = [
-        input_dir / "CFSU 戦術作戦センター.html",
-        input_dir / "【謎のヒロインＫ】.html",
-        input_dir / "ツキ.html",
-        input_dir / "アステリオン.html",
-        input_dir / "アーサー.html",
-    ]
-    missing = [path for path in targets if not path.exists()]
-    if missing:
-        pytest.skip(f"local private real HTML fixtures missing: {missing}")
-
-    sheets = [load_character_sheet(path.read_bytes()) for path in targets]
-
-    assert any(entry.classification.kind == SkillKind.ORIGINAL for entry in sheets[1].entries)
-    assert any(entry.classification.kind == SkillKind.DEFAULT for entry in sheets[1].entries)
-    assert sheets[2].read_only is False
-    assert sheets[2].vacant_slot_count == 1
-    assert any(entry.skill.get("id") == "sk1" for entry in sheets[3].entries)
-    assert sheets[4].read_only is False
-    assert sheets[4].slot_count == 6
-    assert sheets[4].vacant_slot_count == 4
-    assert all(entry.classification.kind == SkillKind.DEFAULT for entry in sheets[4].entries)
-
-
-def test_real_input_directory_summary_is_parseable_for_supported_sheets() -> None:
-    input_dir = _real_input_dir()
-    if not input_dir.exists():
-        pytest.skip("local private real HTML input directory is not available")
-
-    html_files = sorted(input_dir.glob("*.html"))
-    if not html_files:
-        pytest.skip("local private real HTML fixtures are not available")
-
-    loaded = 0
-    rejected = 0
-    for path in html_files:
+@lru_cache(maxsize=None)
+def _survey_private_fixtures(input_dir: Path) -> _AnonymousSurvey:
+    paths = tuple(sorted(input_dir.glob("*.html")))
+    fixtures: list[_AnonymousFixture] = []
+    rejected_count = 0
+    for path in paths:
         try:
-            load_character_sheet(path.read_bytes())
-        except CharacterSheetError:
-            rejected += 1
-        else:
-            loaded += 1
+            raw = path.read_bytes()
+            sheet = load_character_sheet(raw)
+        except (OSError, CharacterSheetError):
+            rejected_count += 1
+            continue
+        fixtures.append(_AnonymousFixture(raw=raw, sheet=sheet))
+    return _AnonymousSurvey(
+        total_count=len(paths),
+        rejected_count=rejected_count,
+        fixtures=tuple(fixtures),
+    )
 
-    assert len(html_files) >= 151
-    assert loaded >= 150
-    assert rejected >= 1
+
+def _anonymous_survey() -> _AnonymousSurvey:
+    input_dir = _private_input_dir()
+    if not input_dir.is_dir():
+        pytest.skip(_PRIVATE_FIXTURE_SKIP_REASON)
+    survey = _survey_private_fixtures(input_dir)
+    if survey.total_count == 0:
+        pytest.skip(_PRIVATE_FIXTURE_SKIP_REASON)
+    return survey
 
 
-def test_edit_copied_real_html_and_save_atomically_without_touching_original(tmp_path: Path) -> None:
-    input_dir = _real_input_dir()
-    source = input_dir / "【謎のヒロインＫ】.html"
-    if not source.exists():
-        pytest.skip("local private real HTML fixture is not available")
+def _anonymous_fixture(
+    predicate: Callable[[CharacterSheet], bool],
+) -> _AnonymousFixture:
+    for fixture in _anonymous_survey().fixtures:
+        if predicate(fixture.sheet):
+            return fixture
+    pytest.skip(_PRIVATE_SCENARIO_SKIP_REASON)
 
-    original_hash = _sha256(source)
-    working = tmp_path / "working.html"
-    output = tmp_path / "edited.html"
-    working.write_bytes(source.read_bytes())
+
+def _sha256(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def test_anonymous_real_sheet_survey_is_parseable() -> None:
+    survey = _anonymous_survey()
+
+    assert survey.total_count >= 150
+    assert len(survey.fixtures) >= 150
+    assert len(survey.fixtures) + survey.rejected_count == survey.total_count
+
+
+def test_anonymous_real_sheets_cover_supported_skill_structures() -> None:
+    sheets = tuple(fixture.sheet for fixture in _anonymous_survey().fixtures)
+
+    assert any(
+        entry.classification.kind == SkillKind.ORIGINAL
+        for sheet in sheets
+        for entry in sheet.entries
+    )
+    assert any(
+        entry.classification.kind == SkillKind.DEFAULT
+        for sheet in sheets
+        for entry in sheet.entries
+    )
+    assert any(not sheet.read_only and sheet.vacant_slot_count > 0 for sheet in sheets)
+    assert any(
+        entry.skill.get("id") == "sk1"
+        for sheet in sheets
+        for entry in sheet.entries
+    )
+    assert any(sheet.slot_count == 6 for sheet in sheets)
+
+
+def test_anonymous_real_sheet_copy_can_be_edited_and_saved_atomically(
+    tmp_path: Path,
+) -> None:
+    fixture = _anonymous_fixture(
+        lambda sheet: not sheet.read_only
+        and any(
+            entry.classification.kind == SkillKind.ORIGINAL
+            for entry in sheet.entries
+        )
+    )
+    working = tmp_path / "working-copy"
+    output = tmp_path / "edited-copy"
+    working.write_bytes(fixture.raw)
+    original_hash = _sha256(working.read_bytes())
     sheet = load_character_sheet(working.read_bytes())
     editable_index = next(
-        entry.index for entry in sheet.entries if entry.classification.kind == SkillKind.ORIGINAL
+        entry.index
+        for entry in sheet.entries
+        if entry.classification.kind == SkillKind.ORIGINAL
     )
+    replacement_name = 'Integration "quote" & <tag> 日本語 🦊'
+    replacement_description = "Integration </script> & < >\nsecond line"
 
     edited = render_name_description_edit(
         sheet,
         index=editable_index,
-        name='保存テスト "quote" & <tag> 日本語 😀',
-        description="説明 </script> & < >\n次の行",
+        name=replacement_name,
+        description=replacement_description,
     )
 
     def validate(path: Path) -> None:
@@ -110,54 +159,94 @@ def test_edit_copied_real_html_and_save_atomically_without_touching_original(tmp
     atomic_save_bytes(output, edited, validate_temp_path=validate)
     rendered = load_character_sheet(output.read_bytes())
 
-    assert _sha256(source) == original_hash
-    assert rendered.entries[editable_index].skill["name"] == '保存テスト "quote" & <tag> 日本語 😀'
-    assert rendered.entries[editable_index].skill["description"] == "説明 </script> & < >\n次の行"
-    assert rendered.entries[editable_index].li.attrs["data-skill-name"] == '保存テスト "quote" & <tag> 日本語 😀'
+    assert _sha256(working.read_bytes()) == original_hash
+    assert rendered.entries[editable_index].skill["name"] == replacement_name
+    assert (
+        rendered.entries[editable_index].skill["description"]
+        == replacement_description
+    )
+    assert (
+        rendered.entries[editable_index].li.attrs["data-skill-name"]
+        == replacement_name
+    )
 
 
-def test_arthur_addition_and_middle_deletion_are_safe_in_memory() -> None:
-    source = _real_input_dir() / "アーサー.html"
-    if not source.exists():
-        pytest.skip("local Arthur HTML fixture is not available")
-    original_hash = _sha256(source)
-    sheet = load_character_sheet(source.read_bytes())
+def test_anonymous_real_sheet_vacant_addition_and_deletion_are_safe() -> None:
+    fixture = _anonymous_fixture(
+        lambda sheet: not sheet.read_only
+        and sheet.slot_count >= 3
+        and sheet.vacant_slot_count > 0
+        and any(
+            entry.classification.kind != SkillKind.EMPTY_SLOT
+            for entry in sheet.entries
+        )
+    )
+    sheet = fixture.sheet
+    deletion_index = next(
+        entry.index
+        for entry in sheet.entries
+        if entry.classification.kind != SkillKind.EMPTY_SLOT
+    )
 
     added = render_vacant_slot_creation(
         sheet,
         name="Integration Original",
-        description="Added to slot three",
+        description="Added to an anonymous vacant slot",
     )
     added_sheet = load_character_sheet(added)
-    deleted = render_skill_deletion(added_sheet, index=0)
+    created_index = next(
+        entry.index
+        for entry in added_sheet.entries
+        if entry.skill["name"] == "Integration Original"
+    )
+    deleted = render_skill_deletion(added_sheet, index=deletion_index)
     deleted_sheet = load_character_sheet(deleted)
 
-    assert added_sheet.entries[2].skill["name"] == "Integration Original"
-    assert added_sheet.vacant_slot_count == 3
-    assert deleted_sheet.entries[0].classification.kind == SkillKind.EMPTY_SLOT
-    assert deleted_sheet.entries[2].skill["name"] == "Integration Original"
-    assert _sha256(source) == original_hash
+    assert added_sheet.entries[created_index].skill["name"] == "Integration Original"
+    assert deleted_sheet.entries[deletion_index].classification.kind == SkillKind.EMPTY_SLOT
+    assert deleted_sheet.entries[created_index].skill["name"] == "Integration Original"
 
 
-def test_real_personality_sections_match_catalog_and_copy_can_be_saved(tmp_path: Path) -> None:
-    source = _real_input_dir() / "アーサー.html"
-    if not source.exists():
-        pytest.skip("local Arthur HTML fixture is not available")
-    original_hash = _sha256(source)
-    sheet = load_character_sheet(source.read_bytes())
+def test_anonymous_real_sheet_personality_copy_can_be_saved(tmp_path: Path) -> None:
     catalog = load_personality_catalog()
+
+    def supports_personality_edit(sheet: CharacterSheet) -> bool:
+        original_ids = {entry.keyword["id"] for entry in sheet.personality_entries}
+        return (
+            not sheet.read_only
+            and bool(original_ids)
+            and any(keyword.id not in original_ids for keyword in catalog)
+        )
+
+    fixture = _anonymous_fixture(supports_personality_edit)
+    working = tmp_path / "working-copy"
+    output = tmp_path / "personality-edited-copy"
+    working.write_bytes(fixture.raw)
+    original_hash = _sha256(working.read_bytes())
+    sheet = load_character_sheet(working.read_bytes())
     original_ids = [entry.keyword["id"] for entry in sheet.personality_entries]
-    replacement_id = next(keyword.id for keyword in catalog if keyword.id not in original_ids)
+    replacement_id = next(
+        keyword.id for keyword in catalog if keyword.id not in original_ids
+    )
     desired_ids = tuple(
         [replacement_id, *original_ids[1:]]
         + [None] * (sheet.personality_slot_count - len(original_ids))
     )
 
-    updated = render_personality_selections(sheet, keyword_ids=desired_ids, catalog=catalog)
-    output = tmp_path / "arthur-personality-edited.html"
-    atomic_save_bytes(output, updated, validate_temp_path=lambda path: load_character_sheet(path.read_bytes()))
+    updated = render_personality_selections(
+        sheet,
+        keyword_ids=desired_ids,
+        catalog=catalog,
+    )
+    atomic_save_bytes(
+        output,
+        updated,
+        validate_temp_path=lambda path: load_character_sheet(path.read_bytes()),
+    )
     rendered = load_character_sheet(output.read_bytes())
 
     assert rendered.personality_entries[0].keyword["id"] == replacement_id
-    assert [entry.keyword["id"] for entry in rendered.personality_entries[1:]] == original_ids[1:]
-    assert _sha256(source) == original_hash
+    assert [
+        entry.keyword["id"] for entry in rendered.personality_entries[1:]
+    ] == original_ids[1:]
+    assert _sha256(working.read_bytes()) == original_hash

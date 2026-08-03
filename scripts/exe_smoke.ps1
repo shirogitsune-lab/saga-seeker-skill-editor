@@ -14,7 +14,7 @@ if ($Theme) {
     $arguments += "--smoke-exit-ms=$($StartupSeconds * 1000)"
 }
 
-$process = Start-Process -FilePath $ExePath -ArgumentList $arguments -PassThru
+$process = Start-Process -FilePath $ExePath -ArgumentList $arguments -PassThru -WindowStyle Hidden
 Start-Sleep -Seconds $StartupSeconds
 
 if ($Theme) {

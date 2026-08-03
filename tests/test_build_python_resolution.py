@@ -171,7 +171,8 @@ def test_python_resolver_reports_when_no_candidate_exists(tmp_path: Path) -> Non
     command = f". '{resolver}'; Resolve-BuildPython -RepositoryRoot '{repository}'"
 
     completed = _run_resolver(command, path=empty_path)
+    compact_error = "".join(completed.stderr.split())
 
     assert completed.returncode != 0
-    assert "Python 3.11 or newer was not found" in completed.stderr
-    assert "Configure -PythonPath, .venv, py -3, or PATH" in completed.stderr
+    assert "Python3.11ornewerwasnotfound" in compact_error
+    assert "Configure-PythonPath,.venv,py-3,orPATH" in compact_error

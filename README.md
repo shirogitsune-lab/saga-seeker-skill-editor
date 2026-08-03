@@ -14,15 +14,13 @@ Saga & SeekerのキャラクターシートHTMLを新規作成し、基本情報
 
 配布形式は次の2種類です。
 
-- `onefile`: 単体のEXE。通常はこちらを使用します。
-- `onedir`: EXEと実行に必要なファイルをまとめたZIP。
+- `onefile`: エディター単体のEXE。通常はこちらを使用します。利用ガイドはReleaseの`SagaSeekerSkillEditor-v2.0.2-guide.html`を別途ダウンロードできます。
+- `onedir`: EXE、実行に必要なファイル、自己完結型の`使い方.html`をまとめたZIP。
 
 このアプリケーションはローカルファイルだけを処理し、ネットワーク通信を行いません。
 
-配布物にはオフラインで読める`使い方.html`と`user-guide-assets/`が含まれます。
-リポジトリ上の正本は
-[docs/user-guide/index.html](docs/user-guide/index.html)です。HTML本文と画像だけで
-完結し、CDN、Webフォント、JavaScript、外部画像を使用しません。
+配布用ガイドは20枚の画像を元バイトのままdata URLとして埋め込んだ単一HTMLで、単体でオフライン閲覧できます。リポジトリ上の保守用正本は
+[docs/user-guide/index.html](docs/user-guide/index.html)と`user-guide-assets/`です。配布時だけ自己完結型HTMLを生成し、CDN、Webフォント、JavaScript、外部画像を使用しません。
 
 ## 画面と操作
 
@@ -68,7 +66,7 @@ PySide6による5タブ構成の画面です。
 
 「AI向けMarkdownを書き出す」は、現在の編集中ドラフトから次をUTF-8の
 **AI向けMarkdown形式 v2**へ出力します。これはアプリケーションバージョン
-`2.0.1`とは別の形式番号です。
+`2.0.2`とは別の形式番号です。
 
 - キャラクター名、プロフィール7項目
 - 性格キーワードと表示順
@@ -185,10 +183,7 @@ Pythonが3.11以上であることを検証します。固定した上限はな�
 
 `SagaSeekerSkillEditor.spec`はEXEアイコンを設定し、onefile版へ`gui/styles/*.qss`、性格キーワードカタログ、新規シート用の既定WebP画像を同梱します。ビルドスクリプトはonedir版にも同じリソースを含めます。PyInstallerのonefile実行時に使用される`_MEIPASS`を含め、リソースパスの解決は一か所へ集約しています。
 
-ビルドスクリプトは成功後、正本HTMLを本文変更なしで`使い方.html`へコピーし、
-20枚の正式画像を`user-guide-assets/`へコピーします。onedirでは実行ファイルと
-同じディレクトリ、onefileでは`dist/`直下が配布先です。正式画像の再生成条件と
-匿名性監査は`docs/user-guide/SCREENSHOT_WORKFLOW.md`および
+ビルドスクリプトは成功後、正本HTMLが参照する20枚の正式画像をdata URLへ変換し、自己完結型の`使い方.html`を生成します。onedirでは実行ファイルと同じディレクトリ、onefileビルドではRelease別添付用として`dist/`直下が出力先です。`scripts/package_release_assets.py`はonefile EXE、onedir ZIP、単体ガイド、`SHA256SUMS.txt`からなる最終候補を組み立て、ZIP内ガイドとの同一性とチェックサムを検証します。正式画像の再生成条件と匿名性監査は`docs/user-guide/SCREENSHOT_WORKFLOW.md`および
 `docs/user-guide/SCREENSHOT_AUDIT.md`に記録しています。
 
 両形式の画像プラグイン回帰は次で確認できます。

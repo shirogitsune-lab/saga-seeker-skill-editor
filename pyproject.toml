@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "saga-seeker-skill-editor"
-version = "2.0.1"
+version = "2.0.2"
 description = "A local Windows GUI editor for Saga & Seeker character sheets."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -36,3 +36,6 @@ saga_seeker_skill_editor = ["gui/styles/*.qss", "data/*.csv"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+  "private_integration: requires ignored or external private character-sheet fixtures",
+]

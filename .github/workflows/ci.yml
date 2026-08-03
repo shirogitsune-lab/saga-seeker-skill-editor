@@ -48,16 +48,35 @@ jobs:
       - name: Install public test dependencies
         run: python -m pip install --disable-pip-version-check -e ".[dev,build]"
 
+      - name: Verify public fixture boundary
+        shell: pwsh
+        run: |
+          if ($env:SAGA_SEEKER_PRIVATE_FIXTURES) {
+            throw "Public CI must not configure private integration fixtures"
+          }
+          $privateHtml = Get-ChildItem "tests/private_fixtures" -Filter *.html -File
+          if ($privateHtml.Count -ne 0) {
+            throw "Public CI checkout contains a private HTML fixture"
+          }
+
       - name: Run complete public test suite
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path work | Out-Null
-          python -m pytest -q -p no:cacheprovider `
+          python -m pytest -q -p no:cacheprovider -m "not private_integration" `
             --basetemp="work/pytest-${{ matrix.python-version }}" `
             --junitxml="work/pytest-${{ matrix.python-version }}.xml"
 
-      - name: Publish test evidence
+      - name: Verify JUnit publication privacy
+        id: junit-privacy
         if: always()
+        shell: pwsh
+        run: |
+          python scripts/verify_junit_privacy.py `
+            "work/pytest-${{ matrix.python-version }}.xml"
+
+      - name: Publish test evidence
+        if: ${{ always() && steps.junit-privacy.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: pytest-python-${{ matrix.python-version }}
@@ -99,10 +118,14 @@ jobs:
           if ($guides.Count -ne 1) {
             throw "onedir distribution must contain exactly one HTML guide"
           }
-          $images = Get-ChildItem "dist/SagaSeekerSkillEditor/user-guide-assets" -Filter *.png
-          if ($images.Count -ne 20) {
-            throw "onedir guide must contain exactly 20 PNG files"
+          if (Test-Path "dist/SagaSeekerSkillEditor/user-guide-assets") {
+            throw "onedir distribution contains obsolete guide assets"
           }
+          ./scripts/exe_smoke.ps1 `
+            -ExePath "dist/SagaSeekerSkillEditor/SagaSeekerSkillEditor.exe" `
+            -Theme light -StartupSeconds 2
+          New-Item -ItemType Directory -Force -Path work | Out-Null
+          Copy-Item "dist/SagaSeekerSkillEditor" "work/ci-onedir" -Recurse
 
       - name: Build and verify onefile
         shell: pwsh
@@ -115,10 +138,42 @@ jobs:
           if ($guides.Count -ne 1) {
             throw "onefile distribution must contain exactly one HTML guide"
           }
-          $images = Get-ChildItem "dist/user-guide-assets" -Filter *.png
-          if ($images.Count -ne 20) {
-            throw "onefile guide must contain exactly 20 PNG files"
+          if (Test-Path "dist/user-guide-assets") {
+            throw "onefile build contains obsolete guide assets"
           }
+          ./scripts/exe_smoke.ps1 `
+            -ExePath "dist/SagaSeekerSkillEditor.exe" `
+            -Theme light -StartupSeconds 2
+
+      - name: Assemble and verify exact release candidate
+        shell: pwsh
+        run: |
+          python scripts/package_release_assets.py `
+            "dist/SagaSeekerSkillEditor.exe" `
+            "work/ci-onedir" `
+            "dist/使い方.html" `
+            "work/release-candidate" `
+            "2.0.2"
+          $archive = "work/release-candidate/SagaSeekerSkillEditor-v2.0.2-windows-x64-onedir.zip"
+          Expand-Archive -LiteralPath $archive -DestinationPath "work/release-extracted"
+          ./scripts/exe_smoke.ps1 `
+            -ExePath "work/release-extracted/SagaSeekerSkillEditor/SagaSeekerSkillEditor.exe" `
+            -Theme light -StartupSeconds 2
+          ./scripts/exe_image_smoke.ps1 `
+            -ExePath "work/release-extracted/SagaSeekerSkillEditor/SagaSeekerSkillEditor.exe"
+          ./scripts/exe_smoke.ps1 `
+            -ExePath "work/release-candidate/SagaSeekerSkillEditor-v2.0.2-windows-x64-onefile.exe" `
+            -Theme light -StartupSeconds 2
+          ./scripts/exe_image_smoke.ps1 `
+            -ExePath "work/release-candidate/SagaSeekerSkillEditor-v2.0.2-windows-x64-onefile.exe"
+
+      - name: Publish release-candidate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: work/release-candidate/*
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Write verification summary
         if: success()
@@ -127,4 +182,6 @@ jobs:
           "## CI verification" >> $env:GITHUB_STEP_SUMMARY
           "- Public tests passed on Python 3.11 and 3.13." >> $env:GITHUB_STEP_SUMMARY
           "- Windows onedir and onefile builds completed." >> $env:GITHUB_STEP_SUMMARY
-          "- Both distributions contain the offline guide and exactly 20 PNG assets." >> $env:GITHUB_STEP_SUMMARY
+          "- Packaged executables passed startup and image-codec smoke checks." >> $env:GITHUB_STEP_SUMMARY
+          "- The exact four-file v2.0.2 release candidate passed ZIP, guide, and SHA-256 verification." >> $env:GITHUB_STEP_SUMMARY
+          "- Artifact: release-candidate-${{ github.sha }}" >> $env:GITHUB_STEP_SUMMARY

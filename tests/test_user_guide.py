@@ -3,6 +3,7 @@ from __future__ import annotations
 from hashlib import sha256
 from html.parser import HTMLParser
 import importlib.util
+import base64
 from pathlib import Path
 import sys
 
@@ -83,6 +84,15 @@ def _load_packaging_module():
     return module
 
 
+def _load_standalone_module():
+    path = ROOT / "scripts" / "standalone_user_guide.py"
+    spec = importlib.util.spec_from_file_location("standalone_user_guide", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _tree_hash(path: Path) -> str:
     digest = sha256()
     for item in sorted(candidate for candidate in path.rglob("*") if candidate.is_file()):
@@ -116,9 +126,82 @@ def test_canonical_guide_is_offline_semantic_and_references_exact_assets() -> No
         assert not image["src"].startswith(("/", "\\"))
         assert (GUIDE_DIR / image["src"]).is_file()
 
-    assert "アプリケーションバージョン 2.0.1" in text
+    assert "アプリケーションバージョン 2.0.2" in text
     assert "AI向けMarkdown形式 v2" in text
     assert "復元されません" in text
+
+
+def test_standalone_guide_embeds_exact_image_bytes_deterministically(
+    tmp_path: Path,
+) -> None:
+    module = _load_standalone_module()
+    output = tmp_path / "使い方.html"
+    canonical_before = GUIDE_HTML.read_bytes()
+    assets_before = {
+        path.name: path.read_bytes() for path in sorted(ASSET_DIR.glob("*.png"))
+    }
+
+    module.generate_standalone_user_guide(GUIDE_HTML, ASSET_DIR, output)
+    first = output.read_bytes()
+    module.generate_standalone_user_guide(GUIDE_HTML, ASSET_DIR, output)
+
+    text = first.decode("utf-8")
+    parser = GuideParser()
+    parser.feed(text)
+    sources = [image["src"] for image in parser.images]
+    assert len(sources) == len(EXPECTED_SCREENSHOTS)
+    assert all(source.startswith("data:image/png;base64,") for source in sources)
+    decoded = [base64.b64decode(source.split(",", 1)[1], validate=True) for source in sources]
+    assert decoded == [assets_before[name] for name in EXPECTED_SCREENSHOTS]
+    assert output.read_bytes() == first
+    assert GUIDE_HTML.read_bytes() == canonical_before
+    assert {
+        path.name: path.read_bytes() for path in sorted(ASSET_DIR.glob("*.png"))
+    } == assets_before
+    assert "user-guide-assets/" not in text
+    assert "http://" not in text
+    assert "https://" not in text
+
+
+def test_standalone_guide_failure_preserves_existing_output(tmp_path: Path) -> None:
+    import pytest
+
+    module = _load_standalone_module()
+    source = tmp_path / "index.html"
+    source.write_text(
+        '<html><body><img src="user-guide-assets/missing.png" alt="missing"></body></html>',
+        encoding="utf-8",
+    )
+    output = tmp_path / "guide.html"
+    output.write_bytes(b"previous-guide")
+
+    with pytest.raises(module.StandaloneGuideError):
+        module.generate_standalone_user_guide(source, ASSET_DIR, output)
+
+    assert output.read_bytes() == b"previous-guide"
+    assert not tuple(tmp_path.glob(".guide.html.*.tmp"))
+
+
+def test_standalone_guide_publish_failure_is_atomic(tmp_path: Path) -> None:
+    import pytest
+
+    module = _load_standalone_module()
+    output = tmp_path / "guide.html"
+    output.write_bytes(b"previous-guide")
+
+    def fail_replace(_source: Path, _target: Path) -> None:
+        raise OSError("injected replacement failure")
+
+    with pytest.raises(module.StandaloneGuideError):
+        module.generate_standalone_user_guide(
+            GUIDE_HTML,
+            ASSET_DIR,
+            output,
+            replace_operation=fail_replace,
+        )
+
+    assert output.read_bytes() == b"previous-guide"
+    assert not tuple(tmp_path.glob(".guide.html.*.tmp"))
 
 
 def test_formal_screenshot_set_is_exact_and_has_fixed_dimensions() -> None:
@@ -145,17 +228,60 @@ def test_packaging_is_byte_identical_removes_stale_assets_and_is_idempotent(
     stale.parent.mkdir(parents=True)
     stale.write_bytes(b"obsolete")
 
-    distributed_html, distributed_assets = module.package_user_guide(destination)
+    distributed_html = module.package_user_guide(destination)
 
-    assert distributed_html.read_bytes() == GUIDE_HTML.read_bytes()
+    parser = GuideParser()
+    parser.feed(distributed_html.read_text(encoding="utf-8"))
+    assert len(parser.images) == len(EXPECTED_SCREENSHOTS)
+    assert all(
+        image["src"].startswith("data:image/png;base64,")
+        for image in parser.images
+    )
     assert not stale.exists()
-    for source in sorted(ASSET_DIR.glob("*.png")):
-        assert (distributed_assets / source.name).read_bytes() == source.read_bytes()
+    assert not (destination / "user-guide-assets").exists()
+    assert tuple(destination.iterdir()) == (distributed_html,)
     first_hash = _tree_hash(destination)
 
     module.package_user_guide(destination)
 
     assert _tree_hash(destination) == first_hash
+
+
+def test_distribution_transaction_restores_removed_obsolete_entry_on_failure(
+    tmp_path: Path,
+) -> None:
+    import os
+    import pytest
+
+    module_path = ROOT / "scripts" / "user_guide_artifacts.py"
+    spec = importlib.util.spec_from_file_location("obsolete_entry_transaction", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    destination = tmp_path / "distribution"
+    old_assets = destination / "user-guide-assets"
+    old_assets.mkdir(parents=True)
+    (destination / "guide.html").write_bytes(b"old-html")
+    (old_assets / "old.png").write_bytes(b"old-image")
+    before = _tree_hash(destination)
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    (staged / "guide.html").write_bytes(b"new-html")
+
+    def fail_placement(_source: Path, _target: Path) -> None:
+        raise OSError("injected placement failure")
+
+    with pytest.raises(module.GuideArtifactError):
+        module.publish_entries_atomically(
+            staged,
+            destination,
+            entry_names=("guide.html",),
+            remove_names=("user-guide-assets",),
+            replace_operation=fail_placement,
+        )
+
+    assert _tree_hash(destination) == before
 
 
 def test_user_guide_sources_are_not_ignored_by_git() -> None:

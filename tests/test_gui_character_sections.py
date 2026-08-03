@@ -51,6 +51,22 @@ def _blank_sheet():
     )
 
 
+def _pipe_memory_sheet(*, matching: bool = True):
+    initial = _blank_sheet()
+    draft = CharacterSheetDraft.from_sheet(initial)
+    token = draft.add_normal_memory(generation=_generation())
+    draft.set_memory_field(token, "title", "Synthetic memory")
+    draft.set_memory_tags(token, ["first", "second"])
+    raw = render_character_sheet(initial, draft)
+    pipe_value = b"first|second" if matching else b"first|different"
+    raw = raw.replace(
+        b'data-memory-tags="[&quot;first&quot;,&quot;second&quot;]"',
+        b'data-memory-tags="' + pipe_value + b'"',
+        1,
+    )
+    return load_character_sheet(raw)
+
+
 def test_basic_info_display_does_not_write_qt_newline_conversion_to_draft() -> None:
     _app()
     initial = _blank_sheet()
@@ -149,6 +165,9 @@ def test_memory_widget_add_edit_move_and_placeholder_fill() -> None:
     widget = MemoryEditorWidget(_generation)
     widget.set_sheet(sheet, draft)
 
+    assert widget.memory_list.count() == 0
+    assert widget.add_button.isEnabled() is True
+    assert widget.fill_button.isEnabled() is True
     assert widget.move_up_shortcut.key().toString() == QKeySequence(
         "Alt+Up"
     ).toString()
@@ -164,6 +183,36 @@ def test_memory_widget_add_edit_move_and_placeholder_fill() -> None:
     reloaded = load_character_sheet(render_character_sheet(sheet, draft))
     assert reloaded.memory_entries[0].memory["title"] == "新しい思い出"
     assert all(entry.is_placeholder for entry in reloaded.memory_entries[1:])
+
+
+def test_game_pipe_memory_is_listed_with_enabled_edit_controls() -> None:
+    _app()
+    sheet = _pipe_memory_sheet()
+    draft = CharacterSheetDraft.from_sheet(sheet)
+    widget = MemoryEditorWidget(_generation)
+
+    widget.set_sheet(sheet, draft)
+
+    assert widget.memory_list.count() == 1
+    assert widget.field_edits["title"].isEnabled() is True
+    assert widget.add_tag_button.isEnabled() is True
+    assert widget.message.text() == ""
+
+
+def test_mismatched_pipe_memory_is_read_only_without_disabling_basic_info() -> None:
+    _app()
+    sheet = _pipe_memory_sheet(matching=False)
+    draft = CharacterSheetDraft.from_sheet(sheet)
+    memories = MemoryEditorWidget(_generation)
+    details = CharacterDetailsWidget()
+
+    memories.set_sheet(sheet, draft)
+    details.set_sheet(sheet, draft)
+
+    assert memories.message.text().startswith("読み取り専用:")
+    assert memories.field_edits["title"].isEnabled() is False
+    assert memories.add_button.isEnabled() is False
+    assert details.name_edit.isEnabled() is True
 
 
 def test_memory_display_counts_original_newline_code_points_without_editing() -> None:

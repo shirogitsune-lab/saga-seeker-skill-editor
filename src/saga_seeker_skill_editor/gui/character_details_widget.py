@@ -148,7 +148,7 @@ class CharacterDetailsWidget(QWidget):
         self.icon_preview.setMinimumSize(160, 160)
         self.icon_preview.setFrameShape(QFrame.Shape.StyledPanel)
         self.icon_preview.setAccessibleName("キャラクター画像プレビュー")
-        self.preview_button = QPushButton("プレビューを表示")
+        self.preview_button = QPushButton("プレビューを再読込")
         self.preview_button.clicked.connect(self.show_icon_preview)
         self.replace_icon_button = QPushButton("画像を差し替える")
         self.replace_icon_button.clicked.connect(self.replace_icon_requested)
@@ -345,6 +345,7 @@ class CharacterDetailsWidget(QWidget):
         sheet: CharacterSheet,
         draft: CharacterSheetDraft,
     ) -> None:
+        self._clear_icon_preview()
         self._sheet = sheet
         self._draft = draft
         data = sheet.data.get("data")
@@ -392,10 +393,13 @@ class CharacterDetailsWidget(QWidget):
             if icon_section.editable
             else f"画像は読み取り専用です: {icon_section.read_only_reason}"
         )
-        self.icon_preview.setPixmap(QPixmap())
-        self.icon_preview.setText("プレビューは未読込です")
+        self.show_icon_preview()
         self._reload_comparison_views()
         self._refresh_counters()
+
+    def _clear_icon_preview(self) -> None:
+        self.icon_preview.setPixmap(QPixmap())
+        self.icon_preview.setText("プレビューは未読込です")
 
     def current_name(self) -> str:
         return self.name_edit.text()
@@ -469,6 +473,10 @@ class CharacterDetailsWidget(QWidget):
             return
         data = self._sheet.data.get("data")
         icon = data.get("icon") if isinstance(data, dict) else None
+        if icon is None:
+            self._clear_icon_preview()
+            self.icon_preview.setText("埋込画像はありません")
+            return
         uri = icon.get("dataUri") if isinstance(icon, dict) else None
         try:
             if not isinstance(uri, str) or not uri.startswith("data:image/"):

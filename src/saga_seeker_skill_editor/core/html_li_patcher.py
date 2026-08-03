@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 import html
 import json
 import re
@@ -12,6 +13,11 @@ from saga_seeker_skill_editor.core.html_locator import LiSpan, StartTagSpan
 
 class LiPatchError(ValueError):
     """Raised when an li cannot be safely patched without full reserialization."""
+
+
+class MemoryTagEncoding(Enum):
+    PIPE = "pipe"
+    JSON = "json"
 
 
 @dataclass(frozen=True)
@@ -124,6 +130,7 @@ def build_patched_memory_li_fields(
     li: LiSpan,
     *,
     replacements: dict[str, str | list[str]],
+    tag_encoding: MemoryTagEncoding = MemoryTagEncoding.JSON,
 ) -> bytes:
     """Patch selected memory attributes while retaining every other byte."""
 
@@ -150,10 +157,14 @@ def build_patched_memory_li_fields(
                 isinstance(tag, str) for tag in value
             ):
                 raise LiPatchError("memory tags must be a list of strings")
-            encoded_value = json.dumps(
-                value,
-                ensure_ascii=False,
-                separators=(",", ":"),
+            encoded_value = (
+                "|".join(value)
+                if tag_encoding is MemoryTagEncoding.PIPE
+                else json.dumps(
+                    value,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
             )
         elif isinstance(value, str):
             encoded_value = value

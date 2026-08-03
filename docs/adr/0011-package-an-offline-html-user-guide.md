@@ -1,6 +1,6 @@
 # ADR 0011: オフラインHTMLガイドと正式スクリーンショットを再生成可能にする
 
-- Status: Accepted
+- Status: Partially superseded by ADR 0013 (distribution representation only)
 - Date: 2026-07-31
 
 ## Context

@@ -28,6 +28,7 @@ from saga_seeker_skill_editor.core.html_locator import (
     text_content,
 )
 from saga_seeker_skill_editor.core.html_li_patcher import (
+    MemoryTagEncoding,
     build_new_memory_li,
     build_patched_memory_li_fields,
     build_patched_start_tag_attr,
@@ -125,6 +126,7 @@ class MemoryEntry:
     memory: dict[str, Any]
     is_placeholder: bool
     html_li: LiSpan | None
+    tag_encoding: MemoryTagEncoding | None = None
 
 
 @dataclass(frozen=True)
@@ -790,6 +792,7 @@ def render_character_sheet(sheet: CharacterSheet, draft: CharacterSheetDraft) ->
                     sheet.raw_html,
                     entry.html_li,
                     replacements=edits,
+                    tag_encoding=entry.tag_encoding or MemoryTagEncoding.JSON,
                 )
             if not memory_order_changed:
                 replacements.append(
@@ -1626,6 +1629,7 @@ def _load_memories(
                 f"memory {index + 1}: {reason}"
             )
         li = lis[index] if index < 6 else None
+        tag_encoding = None
         if li is not None:
             if placeholder:
                 if not _is_vacant_html_slot(li):
@@ -1636,12 +1640,18 @@ def _load_memories(
                 return tuple(entries), html_raw, len(lis), False, (
                     f"JSON and HTML memories do not match at position {index + 1}"
                 )
+            else:
+                tag_encoding = memory_tag_encoding_if_matches(
+                    memory.get("tags"),
+                    li.attrs.get("data-memory-tags"),
+                )
         entries.append(
             MemoryEntry(
                 index=index,
                 memory=memory,
                 is_placeholder=placeholder,
                 html_li=li,
+                tag_encoding=tag_encoding,
             )
         )
 
@@ -1682,13 +1692,39 @@ def _memory_matches_li(memory: dict[str, Any], li: LiSpan) -> bool:
     if any(li.attrs.get(attr) != memory.get(key) for key, attr in checks.items()):
         return False
     tags_raw = li.attrs.get("data-memory-tags")
-    if tags_raw is None:
-        return False
+    return memory_tags_match_html_attribute(
+        memory.get("tags"), tags_raw
+    ) and text_content(li.inner) == memory.get("title")
+
+
+def memory_tags_match_html_attribute(
+    json_tags: object,
+    html_value: object,
+) -> bool:
+    """Match a game pipe value or editor JSON value against authoritative tags."""
+
+    return memory_tag_encoding_if_matches(json_tags, html_value) is not None
+
+
+def memory_tag_encoding_if_matches(
+    json_tags: object,
+    html_value: object,
+) -> MemoryTagEncoding | None:
+    """Classify a matching HTML encoding without splitting pipe values."""
+
+    if not isinstance(json_tags, list) or not all(
+        isinstance(tag, str) for tag in json_tags
+    ):
+        return None
+    if not isinstance(html_value, str):
+        return None
+    if html_value == "|".join(json_tags):
+        return MemoryTagEncoding.PIPE
     try:
-        tags = json.loads(tags_raw)
+        decoded = json.loads(html_value)
     except json.JSONDecodeError:
-        return False
-    return tags == memory.get("tags") and text_content(li.inner) == memory.get("title")
+        return None
+    return MemoryTagEncoding.JSON if decoded == json_tags else None
 
 
 def _load_icon_html(

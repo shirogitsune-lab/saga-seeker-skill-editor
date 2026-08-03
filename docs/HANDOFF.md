@@ -6,18 +6,19 @@ Read `AGENTS.md` and `CONTEXT.md` first, then inspect the ADRs linked below.
 ## Baseline
 
 - Product: Saga & Seeker Skill Editor
-- Application version: `2.0.1`
-- Public release: `v2.0.0`
-- Release tag commit: `87387cbece195911554473d7db3b71556862c2a5`
+- Application version: `2.0.2` release candidate
+- Public release: `v2.0.1`
+- Release tag commit: `0de1700bfead694a78468e3027f1a4a9ec2aad3d`
 - Repository: `https://github.com/shirogitsune-lab/saga-seeker-skill-editor`
 - Default branch: `main`
 - License: MIT for the source code, bundled canary artwork, and distributions
 - Platform: Windows 10/11 desktop
 - Runtime: Python 3.11+ and PySide6; packaged users do not need Python
 
-The public `v2.0.0` tag is the baseline for the current local repair branches.
-The repairs are local stacked branches; they have not been pushed, merged,
-tagged, or released.
+The public `v2.0.1` tag is the baseline for the local
+`fix/v2.0.2-memory-guide` release-candidate branch. The candidate has not been
+pushed, merged, tagged, or released. Release, tag, and merge remain separate
+approval gates.
 
 ## Product Purpose
 
@@ -86,7 +87,7 @@ The original input file is not an in-place editing target. Safety and preservati
 ### Markdown Interchange
 
 - Writes canonical AI-oriented Markdown format v2. Application version
-  `2.0.1` and format version `2` are separate identifiers.
+  `2.0.2` and format version `2` are separate identifiers.
 - Exports the current rendered draft in-process; it does not launch or depend
   on the standalone Rust converter executable.
 - Preserves the standalone converter's important semantic output, including
@@ -148,6 +149,8 @@ See:
 - [ADR 0009: Treat profile `<br>` as semantic newlines](adr/0009-treat-profile-br-as-semantic-newlines.md)
 - [ADR 0010: Define AI-oriented Markdown format v2](adr/0010-define-ai-markdown-format-v2.md)
 - [ADR 0011: Package an offline HTML user guide](adr/0011-package-an-offline-html-user-guide.md)
+- [ADR 0012: Accept game memory tag encoding](adr/0012-accept-game-memory-tag-encoding.md)
+- [ADR 0013: Generate a standalone distribution guide](adr/0013-generate-standalone-distribution-guide.md)
 
 ### Offline User Guide
 
@@ -155,15 +158,16 @@ See:
 - Formal images: `docs/user-guide/user-guide-assets/*.png` (exactly 20)
 - Regeneration procedure: `docs/user-guide/SCREENSHOT_WORKFLOW.md`
 - Actual visual anonymity audit: `docs/user-guide/SCREENSHOT_AUDIT.md`
-- Distribution copy: byte-identical `使い方.html` plus `user-guide-assets/`
+- Distribution output: one self-contained `使い方.html` with the exact PNG
+  bytes embedded as data URLs; the split source remains canonical.
 - Automated `offscreen` inspection and formal Windows Qt capture are separate.
 - Formal images use anonymous synthetic dataset `ANON-GUIDE-001`, a fixed
   1440×900 widget capture, Windows normal Qt, 100% scale, and Fusion style.
 - Screenshot generation stages and fully decodes the exact 20 PNG files before
   replacing the old set; a failed publish restores the old set.
 - `scripts/package_user_guide.py` rejects canonical-source path overlaps,
-  transactionally replaces the destination HTML/assets, removes stale images,
-  and produces idempotent copies. `build.ps1` invokes it after both build modes.
+  transactionally replaces the destination HTML, removes stale image folders,
+  and produces idempotent output. `build.ps1` invokes it after both build modes.
 
 ## v2.0.0 Character-Sheet Editing
 
@@ -270,7 +274,7 @@ The byte-preserving model, GUI, and save workflow are implemented:
 - Save validation compares every load-time read-only section's JSON bytes,
   HTML bytes, diagnostic codes, severity, counts, correspondence, and reason.
   Editable sections must remain valid after rendering.
-- The package metadata is `2.0.1`; the GUI title is
+- The package metadata is `2.0.2`; the GUI title is
   `Saga & Seeker キャラクターシートエディター`. Executable, repository, and
   Python-package names remain unchanged.
 - PyInstaller onedir and onefile definitions include the default WebP. The
@@ -365,10 +369,13 @@ and there is no machine-specific installation path fallback.
 
 - onedir output: `dist/SagaSeekerSkillEditor/`
 - onefile output: `dist/SagaSeekerSkillEditor.exe`
-- Both outputs include byte-identical `使い方.html` and `user-guide-assets/`.
+- onedir includes self-contained `使い方.html`; the onefile build emits the
+  same guide beside the EXE for separate Release attachment. Neither depends
+  on a distributed `user-guide-assets/` directory.
 - `Pillow` is used only to convert the icon before packaging and is excluded from the onefile bundle.
 - QSS, the icon, and the personality catalog must work in source, onedir, and onefile execution.
-- Release assets should include a versioned onefile EXE, a versioned onedir ZIP, and `SHA256SUMS.txt`.
+- Release assets include a versioned onefile EXE, a versioned onedir ZIP, the
+  standalone guide, and `SHA256SUMS.txt`; CI verifies this exact set.
 - The binaries are unsigned, so Windows SmartScreen may warn.
 - onefile is convenient as one executable; onedir is equally supported and may start faster or attract fewer antivirus false positives.
 
@@ -393,10 +400,17 @@ The game-derived names and classification data in `data/personality_keywords.csv
 
 ## Current Maintenance State
 
-- The public v2.0.0 feature and profile comparison are the repair baseline.
-  Three local stacked repair branches add profile `<br>` compatibility,
-  AI-oriented Markdown format v2, and the packaged offline HTML guide.
-  They have not been pushed, merged, tagged, or released.
+- Public `v2.0.1` is the release baseline. The local v2.0.2 candidate accepts
+  the game's pipe-encoded memory tags while preserving genuine mismatch
+  read-only behavior, original tag encoding, placeholders, JSON-only memories,
+  unknown fields, and unchanged bytes.
+- Distribution packaging now generates one self-contained HTML guide while
+  retaining the split canonical source. The exact candidate set is onefile
+  EXE, onedir ZIP, standalone guide, and `SHA256SUMS.txt`; CI verifies and
+  archives that set by head SHA.
+- ADR 0012 records memory-tag compatibility. ADR 0013 supersedes only ADR
+  0011's split distribution-copy decision; screenshot and canonical-source
+  decisions remain in force.
 - Use GitHub Issues for the next feature request or defect before substantial implementation.
 - `core/invariant_segments.py` exists, but the production save path does not currently call it. Byte preservation is provided by targeted replacements and focused tests. Before claiming universal runtime invariant-segment validation, either integrate the helper into the render/save path with tests or narrow the README statement.
 - The release announcement presented v1.2.0 as the first advertised update after v1.0.0; v1.1.0 existed publicly but was not separately advertised.

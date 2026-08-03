@@ -164,7 +164,11 @@ def _status_sheet_bytes() -> bytes:
     ).encode("utf-8")
 
 
-def _memory_sheet_bytes(memory_count: int = 8) -> bytes:
+def _memory_sheet_bytes(
+    memory_count: int = 8,
+    *,
+    tag_encoding: str = "json",
+) -> bytes:
     memories = []
     for index in range(memory_count):
         if index in {1, 3, 5}:
@@ -214,6 +218,16 @@ def _memory_sheet_bytes(memory_count: int = 8) -> bytes:
         if memory["isPlaceholder"]:
             memory_lis.append("<li>&nbsp;</li>")
             continue
+        if tag_encoding == "json":
+            encoded_tags = json.dumps(
+                memory["tags"],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        elif tag_encoding == "pipe":
+            encoded_tags = "|".join(memory["tags"])
+        else:
+            raise ValueError(f"unsupported tag encoding: {tag_encoding}")
         attrs = {
             "data-memory-id": memory["id"],
             "data-memory-title": memory["title"],
@@ -221,11 +235,7 @@ def _memory_sheet_bytes(memory_count: int = 8) -> bytes:
             "data-memory-location": memory["location"],
             "data-memory-intent": memory["intent"],
             "data-memory-outcome": memory["outcome"],
-            "data-memory-tags": json.dumps(
-                memory["tags"],
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ),
+            "data-memory-tags": encoded_tags,
         }
         rendered_attrs = " ".join(
             f'{key}="{html.escape(value, quote=True)}"' for key, value in attrs.items()
@@ -235,6 +245,7 @@ def _memory_sheet_bytes(memory_count: int = 8) -> bytes:
         memory_lis.append(
             f'<li {rendered_attrs}>{html.escape(memory["title"], quote=False)}</li>'
         )
+    memory_lis.extend("<li>&nbsp;</li>" for _ in range(6 - len(memory_lis)))
     return (
         "<!doctype html><html><body>"
         '<div id="name-value">Memory Test</div>'
@@ -244,6 +255,54 @@ def _memory_sheet_bytes(memory_count: int = 8) -> bytes:
         f'<script id="character-sheet-data" type="application/json">{payload}</script>'
         "</body></html>"
     ).encode("utf-8")
+
+
+def _replace_memory_json(
+    raw: bytes,
+    index: int,
+    replacement: dict[str, object],
+) -> bytes:
+    marker = b'<script id="character-sheet-data" type="application/json">'
+    prefix, remainder = raw.split(marker, 1)
+    payload, suffix = remainder.split(b"</script>", 1)
+    document = json.loads(payload.decode("utf-8"))
+    document["data"]["memories"][index] = replacement
+    return (
+        prefix
+        + marker
+        + json.dumps(document, ensure_ascii=False, indent=2).encode("utf-8")
+        + b"</script>"
+        + suffix
+    )
+
+
+def _placeholder_memory() -> dict[str, object]:
+    return {
+        "id": "",
+        "title": "",
+        "summary": "",
+        "location": "",
+        "intent": "",
+        "outcome": "",
+        "tags": [],
+        "isPlaceholder": True,
+    }
+
+
+def _placeholder_memory_sheet_bytes(count: int) -> bytes:
+    raw = _memory_sheet_bytes(0)
+    marker = b'<script id="character-sheet-data" type="application/json">'
+    prefix, remainder = raw.split(marker, 1)
+    payload, suffix = remainder.split(b"</script>", 1)
+    document = json.loads(payload.decode("utf-8"))
+    document["data"]["memories"] = [_placeholder_memory() for _ in range(count)]
+    return (
+        prefix
+        + marker
+        + json.dumps(document, ensure_ascii=False, indent=2).encode("utf-8")
+        + b"</script>"
+        + suffix
+    )
 
 
 def _icon_sheet_bytes() -> bytes:
@@ -559,6 +618,176 @@ def test_memory_boundary_keeps_eight_json_objects_and_six_html_slots_consistent(
         True,
         True,
     ]
+
+
+def test_game_pipe_memory_tags_load_as_editable_when_json_tags_match() -> None:
+    sheet = load_character_sheet(_memory_sheet_bytes(tag_encoding="pipe"))
+
+    section = sheet.diagnostic_baseline.for_section("memories")
+    assert section.editable is True
+    assert section.position_consistent is True
+    assert len(sheet.memory_entries) == 8
+
+
+def test_editing_game_pipe_memory_tags_preserves_pipe_encoding() -> None:
+    sheet = load_character_sheet(_memory_sheet_bytes(tag_encoding="pipe"))
+    draft = CharacterSheetDraft.from_sheet(sheet)
+    edited_tags = ["first", "contains|pipe", ""]
+
+    draft.set_memory_tags(0, edited_tags)
+    rendered = render_character_sheet(sheet, draft)
+    reloaded = load_character_sheet(rendered)
+    memory = reloaded.memory_entries[0]
+
+    assert memory.memory["tags"] == edited_tags
+    assert memory.memory["futureExtension"] == {"preserve": ["exact", 7]}
+    assert memory.html_li is not None
+    assert memory.html_li.attrs["data-memory-tags"] == "first|contains|pipe|"
+    assert reloaded.diagnostic_baseline.for_section("memories").editable is True
+
+
+def test_non_tag_edit_keeps_game_pipe_attribute_bytes_unchanged() -> None:
+    raw = _memory_sheet_bytes(tag_encoding="pipe")
+    sheet = load_character_sheet(raw)
+    draft = CharacterSheetDraft.from_sheet(sheet)
+    original_attribute = b'data-memory-tags="tag-0|| tag-0 "'
+
+    draft.set_memory_field(0, "summary", "changed summary")
+    rendered = render_character_sheet(sheet, draft)
+
+    assert rendered.count(original_attribute) == raw.count(original_attribute)
+    assert rendered.replace(
+        b'"summary": "changed summary"', b'"summary": "summary-0"', 1
+    ).replace(
+        b'data-memory-summary="changed summary"',
+        b'data-memory-summary="summary-0"',
+        1,
+    ) == raw
+
+
+@pytest.mark.parametrize("count", [0, 1, 6, 15])
+def test_empty_and_placeholder_only_memory_states_remain_editable(count: int) -> None:
+    raw = (
+        _memory_sheet_bytes(0)
+        if count == 0
+        else _placeholder_memory_sheet_bytes(count)
+    )
+
+    sheet = load_character_sheet(raw)
+    section = sheet.diagnostic_baseline.for_section("memories")
+
+    assert section.editable is True
+    assert section.html_count == 6
+    assert len(sheet.memory_entries) == count
+    assert all(entry.is_placeholder for entry in sheet.memory_entries)
+    assert render_character_sheet(sheet, CharacterSheetDraft.from_sheet(sheet)) == raw
+
+
+@pytest.mark.parametrize("tag_encoding", ["json", "pipe"])
+def test_empty_tag_array_matches_both_supported_html_encodings(
+    tag_encoding: str,
+) -> None:
+    raw = _memory_sheet_bytes(tag_encoding=tag_encoding)
+    first = dict(load_character_sheet(raw).data["data"]["memories"][0])
+    first["tags"] = []
+    raw = _replace_memory_json(raw, 0, first)
+    old_value = (
+        b'[&quot;tag-0&quot;,&quot;&quot;,&quot; tag-0 &quot;]'
+        if tag_encoding == "json"
+        else b"tag-0|| tag-0 "
+    )
+    new_value = b"[]" if tag_encoding == "json" else b""
+    raw = raw.replace(
+        b'data-memory-tags="' + old_value + b'"',
+        b'data-memory-tags="' + new_value + b'"',
+        1,
+    )
+
+    sheet = load_character_sheet(raw)
+
+    assert sheet.diagnostic_baseline.for_section("memories").editable is True
+    assert sheet.memory_entries[0].memory["tags"] == []
+
+
+@pytest.mark.parametrize(
+    ("tag_encoding", "old", "new"),
+    [
+        ("json", b'data-memory-id="memory-id-0"', b'data-memory-id="different"'),
+        ("json", b'data-memory-title="title-0"', b'data-memory-title="different"'),
+        (
+            "json",
+            b'data-memory-summary="summary-0"',
+            b'data-memory-summary="different"',
+        ),
+        ("json", b">title-0</li>", b">different</li>"),
+        (
+            "pipe",
+            b'data-memory-tags="tag-0|| tag-0 "',
+            b'data-memory-tags="tag-0|different"',
+        ),
+        (
+            "json",
+            b'data-memory-tags="[&quot;tag-0&quot;,&quot;&quot;,&quot; tag-0 &quot;]"',
+            b'data-memory-tags="[&quot;different&quot;]"',
+        ),
+        (
+            "json",
+            b'data-memory-tags="[&quot;tag-0&quot;,&quot;&quot;,&quot; tag-0 &quot;]"',
+            b'data-memory-tags="[broken"',
+        ),
+    ],
+)
+def test_real_memory_mismatches_keep_memories_read_only(
+    tag_encoding: str,
+    old: bytes,
+    new: bytes,
+) -> None:
+    raw = _memory_sheet_bytes(tag_encoding=tag_encoding).replace(old, new, 1)
+
+    sheet = load_character_sheet(raw)
+
+    assert sheet.diagnostic_baseline.for_section("memories").editable is False
+    assert sheet.diagnostic_baseline.for_section("name").editable is True
+
+
+def test_non_string_json_tag_keeps_memories_read_only() -> None:
+    raw = _memory_sheet_bytes()
+    first = dict(load_character_sheet(raw).data["data"]["memories"][0])
+    first["tags"] = ["tag-0", 7]
+
+    sheet = load_character_sheet(_replace_memory_json(raw, 0, first))
+
+    section = sheet.diagnostic_baseline.for_section("memories")
+    assert section.editable is False
+    assert "tags must be an array of strings" in section.read_only_reason
+
+
+def test_placeholder_with_known_value_keeps_memories_read_only() -> None:
+    raw = _placeholder_memory_sheet_bytes(1)
+    invalid = _placeholder_memory()
+    invalid["summary"] = "not empty"
+
+    sheet = load_character_sheet(_replace_memory_json(raw, 0, invalid))
+
+    section = sheet.diagnostic_baseline.for_section("memories")
+    assert section.editable is False
+    assert "placeholder fields must use the complete empty structure" in (
+        section.read_only_reason
+    )
+
+
+def test_memory_html_slot_count_other_than_six_keeps_memories_read_only() -> None:
+    raw = _memory_sheet_bytes(0).replace(
+        b'<ul id="memories-value"><li>&nbsp;</li>',
+        b'<ul id="memories-value">',
+        1,
+    )
+
+    sheet = load_character_sheet(raw)
+
+    section = sheet.diagnostic_baseline.for_section("memories")
+    assert section.editable is False
+    assert section.html_count == 5
 
 
 def test_existing_icon_is_matched_by_raw_uri_without_decoding_image_bytes() -> None:

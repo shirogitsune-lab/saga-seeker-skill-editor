@@ -6,19 +6,18 @@ Read `AGENTS.md` and `CONTEXT.md` first, then inspect the ADRs linked below.
 ## Baseline
 
 - Product: Saga & Seeker Skill Editor
-- Application version: `2.0.2` release candidate
-- Public release: `v2.0.1`
-- Release tag commit: `0de1700bfead694a78468e3027f1a4a9ec2aad3d`
+- Application version: `2.0.2`
+- Release series represented by this source tree: `v2.0.2`
 - Repository: `https://github.com/shirogitsune-lab/saga-seeker-skill-editor`
 - Default branch: `main`
 - License: MIT for the source code, bundled canary artwork, and distributions
 - Platform: Windows 10/11 desktop
 - Runtime: Python 3.11+ and PySide6; packaged users do not need Python
 
-The public `v2.0.1` tag is the baseline for the pushed
-`fix/v2.0.2-memory-guide` release-candidate branch. Draft PR #3 is open against
-`main`. The candidate has not been merged, tagged, or released. Merge, tag, and
-Release remain separate approval gates.
+PR #3 merged the `v2.0.2` changes into `main` at
+`c1d3582a97b86a8d404b34c1cd3800fb017333a3`. Published-release status, the
+latest tag, and the latest GitHub Release are operational state; verify them on
+GitHub instead of relying on this handoff document.
 
 ## Product Purpose
 
@@ -411,18 +410,17 @@ The game-derived names and classification data in `data/personality_keywords.csv
 
 ## Current Maintenance State
 
-- Public `v2.0.1` is the release baseline. The local v2.0.2 candidate accepts
+- The `v2.0.2` changes were merged into `main` by PR #3. The main branch accepts
   the game's pipe-encoded memory tags while preserving genuine mismatch
   read-only behavior, original tag encoding, placeholders, JSON-only memories,
   unknown fields, and unchanged bytes.
-- Distribution packaging now generates one self-contained HTML guide while
-  retaining the split canonical source. The exact candidate set is onefile
-  EXE, onedir ZIP, standalone guide, and `SHA256SUMS.txt`; CI verifies that
-  exact set. A pull-request Artifact is built from GitHub's merge ref and must
-  not be reused for a final Release; rebuild from merged `main` or the formal
-  tag instead.
-- `fix/v2.0.2-memory-guide` is pushed and Draft PR #3 is open against `main`.
-  It is not merged. No v2.0.2 tag or GitHub Release has been created.
+- Distribution packaging on `main` generates one self-contained HTML guide
+  while retaining the split canonical source. The exact release asset set is
+  onefile EXE, onedir ZIP, standalone guide, and `SHA256SUMS.txt`; CI verifies
+  that exact set. Formal tag creation and GitHub Release publication are
+  separate operations targeting a CI-verified `main` commit. A pull-request
+  Artifact is built from GitHub's merge ref and must not be reused for a
+  formal Release; rebuild from `main` or the formal tag instead.
 - ADR 0012 records memory-tag compatibility. ADR 0013 supersedes only ADR
   0011's split distribution-copy decision; screenshot and canonical-source
   decisions remain in force.

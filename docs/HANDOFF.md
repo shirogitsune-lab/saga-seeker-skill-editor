@@ -15,10 +15,10 @@ Read `AGENTS.md` and `CONTEXT.md` first, then inspect the ADRs linked below.
 - Platform: Windows 10/11 desktop
 - Runtime: Python 3.11+ and PySide6; packaged users do not need Python
 
-The public `v2.0.1` tag is the baseline for the local
-`fix/v2.0.2-memory-guide` release-candidate branch. The candidate has not been
-pushed, merged, tagged, or released. Release, tag, and merge remain separate
-approval gates.
+The public `v2.0.1` tag is the baseline for the pushed
+`fix/v2.0.2-memory-guide` release-candidate branch. Draft PR #3 is open against
+`main`. The candidate has not been merged, tagged, or released. Merge, tag, and
+Release remain separate approval gates.
 
 ## Product Purpose
 

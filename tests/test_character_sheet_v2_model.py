@@ -260,7 +260,7 @@ def _memory_sheet_bytes(
 def _replace_memory_json(
     raw: bytes,
     index: int,
-    replacement: dict[str, object],
+    replacement: object,
 ) -> bytes:
     marker = b'<script id="character-sheet-data" type="application/json">'
     prefix, remainder = raw.split(marker, 1)
@@ -719,6 +719,21 @@ def test_empty_tag_array_matches_both_supported_html_encodings(
             b'data-memory-summary="summary-0"',
             b'data-memory-summary="different"',
         ),
+        (
+            "json",
+            b'data-memory-location="location-0"',
+            b'data-memory-location="different"',
+        ),
+        (
+            "json",
+            b'data-memory-intent="intent-0"',
+            b'data-memory-intent="different"',
+        ),
+        (
+            "json",
+            b'data-memory-outcome="outcome-0"',
+            b'data-memory-outcome="different"',
+        ),
         ("json", b">title-0</li>", b">different</li>"),
         (
             "pipe",
@@ -734,6 +749,11 @@ def test_empty_tag_array_matches_both_supported_html_encodings(
             "json",
             b'data-memory-tags="[&quot;tag-0&quot;,&quot;&quot;,&quot; tag-0 &quot;]"',
             b'data-memory-tags="[broken"',
+        ),
+        (
+            "json",
+            b' data-memory-tags="[&quot;tag-0&quot;,&quot;&quot;,&quot; tag-0 &quot;]"',
+            b"",
         ),
     ],
 )
@@ -760,6 +780,48 @@ def test_non_string_json_tag_keeps_memories_read_only() -> None:
     section = sheet.diagnostic_baseline.for_section("memories")
     assert section.editable is False
     assert "tags must be an array of strings" in section.read_only_reason
+
+
+def test_non_boolean_placeholder_flag_keeps_memories_read_only() -> None:
+    raw = _memory_sheet_bytes()
+    first = dict(load_character_sheet(raw).data["data"]["memories"][0])
+    first["isPlaceholder"] = "false"
+
+    sheet = load_character_sheet(_replace_memory_json(raw, 0, first))
+
+    section = sheet.diagnostic_baseline.for_section("memories")
+    assert section.editable is False
+    assert "isPlaceholder must be a boolean" in section.read_only_reason
+
+
+def test_non_object_memory_keeps_memories_read_only() -> None:
+    raw = _memory_sheet_bytes()
+
+    sheet = load_character_sheet(_replace_memory_json(raw, 0, "not-an-object"))
+
+    section = sheet.diagnostic_baseline.for_section("memories")
+    assert section.editable is False
+    assert section.read_only_reason == "data.memories has an unsupported type"
+
+
+def test_fifteen_mixed_memories_preserve_types_order_and_unchanged_bytes() -> None:
+    raw = _memory_sheet_bytes(15, tag_encoding="pipe")
+
+    sheet = load_character_sheet(raw)
+
+    assert sheet.diagnostic_baseline.for_section("memories").editable is True
+    assert len(sheet.memory_entries) == 15
+    assert [entry.is_placeholder for entry in sheet.memory_entries[:7]] == [
+        False,
+        True,
+        False,
+        True,
+        False,
+        True,
+        False,
+    ]
+    assert all(entry.html_li is None for entry in sheet.memory_entries[6:])
+    assert render_character_sheet(sheet, CharacterSheetDraft.from_sheet(sheet)) == raw
 
 
 def test_placeholder_with_known_value_keeps_memories_read_only() -> None:

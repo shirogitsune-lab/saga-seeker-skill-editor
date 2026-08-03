@@ -103,3 +103,22 @@ def test_release_verification_rejects_tampered_file(tmp_path: Path) -> None:
 
     with pytest.raises(module.ReleasePackagingError):
         module.verify_release_assets(output, VERSION)
+
+
+def test_public_ci_verifies_and_archives_the_exact_release_candidate() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+
+    package_step = workflow.index("python scripts/package_release_assets.py")
+    extracted_smoke = workflow.index(
+        "work/release-extracted/SagaSeekerSkillEditor/SagaSeekerSkillEditor.exe"
+    )
+    onefile_smoke = workflow.index(
+        f"work/release-candidate/SagaSeekerSkillEditor-v{VERSION}-windows-x64-onefile.exe"
+    )
+    upload_step = workflow.index("name: release-candidate-${{ github.sha }}")
+
+    assert package_step < extracted_smoke < onefile_smoke < upload_step
+    assert workflow.count("./scripts/exe_image_smoke.ps1") >= 2
+    assert "path: work/release-candidate/*" in workflow

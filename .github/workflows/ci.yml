@@ -140,9 +140,13 @@ jobs:
           ./scripts/exe_smoke.ps1 `
             -ExePath "work/release-extracted/SagaSeekerSkillEditor/SagaSeekerSkillEditor.exe" `
             -Theme light -StartupSeconds 2
+          ./scripts/exe_image_smoke.ps1 `
+            -ExePath "work/release-extracted/SagaSeekerSkillEditor/SagaSeekerSkillEditor.exe"
           ./scripts/exe_smoke.ps1 `
             -ExePath "work/release-candidate/SagaSeekerSkillEditor-v2.0.2-windows-x64-onefile.exe" `
             -Theme light -StartupSeconds 2
+          ./scripts/exe_image_smoke.ps1 `
+            -ExePath "work/release-candidate/SagaSeekerSkillEditor-v2.0.2-windows-x64-onefile.exe"
 
       - name: Publish release-candidate evidence
         uses: actions/upload-artifact@v4
@@ -159,6 +163,6 @@ jobs:
           "## CI verification" >> $env:GITHUB_STEP_SUMMARY
           "- Public tests passed on Python 3.11 and 3.13." >> $env:GITHUB_STEP_SUMMARY
           "- Windows onedir and onefile builds completed." >> $env:GITHUB_STEP_SUMMARY
-          "- Packaged executables passed startup smoke checks." >> $env:GITHUB_STEP_SUMMARY
+          "- Packaged executables passed startup and image-codec smoke checks." >> $env:GITHUB_STEP_SUMMARY
           "- The exact four-file v2.0.2 release candidate passed ZIP, guide, and SHA-256 verification." >> $env:GITHUB_STEP_SUMMARY
           "- Artifact: release-candidate-${{ github.sha }}" >> $env:GITHUB_STEP_SUMMARY

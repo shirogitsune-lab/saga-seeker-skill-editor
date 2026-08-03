@@ -1000,8 +1000,6 @@ class MainWindow(QMainWindow):
             self.load_path(self.current_path)
 
     def load_path(self, path: Path) -> bool:
-        if not self._resolve_unsaved_changes():
-            return False
         try:
             sheet = load_character_sheet(path.read_bytes())
         except (OSError, CharacterSheetError) as exc:
@@ -1010,13 +1008,15 @@ class MainWindow(QMainWindow):
                 if self.sheet is not None
                 else "このファイルの編集は開始されていません。"
             )
-            self._record_error(
+            self._present_transient_error(
                 title="読み込みエラー",
                 cause="選択したHTMLを安全なキャラクターシートとして読み込めませんでした。",
                 impact=impact,
                 remedy="別のHTMLを選択するか、元のゲームからシートを再出力してください。",
                 details=str(exc),
             )
+            return False
+        if not self._resolve_unsaved_changes():
             return False
         self._apply_sheet(path, sheet)
         return True
@@ -1470,6 +1470,25 @@ class MainWindow(QMainWindow):
         self.active_error = UiError(title=title, cause=cause, impact=impact, remedy=remedy, details=details)
         self._sync_ui_state()
         self._present_error_dialog(self.active_error)
+
+    def _present_transient_error(
+        self,
+        *,
+        title: str,
+        cause: str,
+        impact: str,
+        remedy: str,
+        details: str,
+    ) -> None:
+        self._present_error_dialog(
+            UiError(
+                title=title,
+                cause=cause,
+                impact=impact,
+                remedy=remedy,
+                details=details,
+            )
+        )
 
     def _present_validation_error(self, message: str) -> None:
         QMessageBox.warning(

@@ -321,12 +321,23 @@ uv run pytest -q --basetemp=work\pytest-handoff -o cache_dir=work\.pytest-handof
 
 The most recent local re-review verification recorded:
 
-- Public run without private fixtures: `256 passed, 5 skipped`.
+- Public CI excludes the five `private_integration` tests and verifies JUnit
+  publication privacy before uploading test evidence. Reports containing a
+  character-sheet filename or absolute local path are not uploaded.
+- The matching local public runs on Python 3.11.14 and Python 3.13.13 each
+  reported `302 passed, 5 deselected`; both generated JUnit reports passed the
+  publication privacy verifier.
 - Focused Markdown interchange and GUI workflow run: `66 passed`.
 - Focused user-guide and build-Python resolution run: `19 passed`.
-- The private real-sheet integration was not rerun for this legacy-Markdown-only
-  change. Its previous result remains `5 passed`; no private path, filename,
-  sheet content, or character identifier was recorded.
+- The private real-sheet integration uses structural anonymous discovery from
+  an ignored or external directory. It records no fixture path or filename in
+  test IDs or skip reasons and most recently passed all five scenarios against
+  the 187-sheet local corpus.
+- The aggregate 187-sheet memory audit recognized all 187 sheets, made the
+  memory section editable in all 187, left zero read-only, preserved unchanged
+  rendering byte-for-byte in all 187, changed zero placeholder semantics, and
+  lost zero memories at position seven or later. No individual filename,
+  character name, text, image, or per-file hash was recorded.
 - Read-only parsing of the 175 standalone-converter Markdown outputs currently
   present classified all 175 as `LEGACY_UNMARKED` and refused all 175 before
   explicit legacy permission. After permission, 172 were valid new-sheet
@@ -406,8 +417,12 @@ The game-derived names and classification data in `data/personality_keywords.csv
   unknown fields, and unchanged bytes.
 - Distribution packaging now generates one self-contained HTML guide while
   retaining the split canonical source. The exact candidate set is onefile
-  EXE, onedir ZIP, standalone guide, and `SHA256SUMS.txt`; CI verifies and
-  archives that set by head SHA.
+  EXE, onedir ZIP, standalone guide, and `SHA256SUMS.txt`; CI verifies that
+  exact set. A pull-request Artifact is built from GitHub's merge ref and must
+  not be reused for a final Release; rebuild from merged `main` or the formal
+  tag instead.
+- `fix/v2.0.2-memory-guide` is pushed and Draft PR #3 is open against `main`.
+  It is not merged. No v2.0.2 tag or GitHub Release has been created.
 - ADR 0012 records memory-tag compatibility. ADR 0013 supersedes only ADR
   0011's split distribution-copy decision; screenshot and canonical-source
   decisions remain in force.

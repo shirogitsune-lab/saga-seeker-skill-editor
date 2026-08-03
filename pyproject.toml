@@ -36,3 +36,6 @@ saga_seeker_skill_editor = ["gui/styles/*.qss", "data/*.csv"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+  "private_integration: requires ignored or external private character-sheet fixtures",
+]

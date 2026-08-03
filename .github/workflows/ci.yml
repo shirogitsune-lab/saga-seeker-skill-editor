@@ -48,16 +48,35 @@ jobs:
       - name: Install public test dependencies
         run: python -m pip install --disable-pip-version-check -e ".[dev,build]"
 
+      - name: Verify public fixture boundary
+        shell: pwsh
+        run: |
+          if ($env:SAGA_SEEKER_PRIVATE_FIXTURES) {
+            throw "Public CI must not configure private integration fixtures"
+          }
+          $privateHtml = Get-ChildItem "tests/private_fixtures" -Filter *.html -File
+          if ($privateHtml.Count -ne 0) {
+            throw "Public CI checkout contains a private HTML fixture"
+          }
+
       - name: Run complete public test suite
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path work | Out-Null
-          python -m pytest -q -p no:cacheprovider `
+          python -m pytest -q -p no:cacheprovider -m "not private_integration" `
             --basetemp="work/pytest-${{ matrix.python-version }}" `
             --junitxml="work/pytest-${{ matrix.python-version }}.xml"
 
-      - name: Publish test evidence
+      - name: Verify JUnit publication privacy
+        id: junit-privacy
         if: always()
+        shell: pwsh
+        run: |
+          python scripts/verify_junit_privacy.py `
+            "work/pytest-${{ matrix.python-version }}.xml"
+
+      - name: Publish test evidence
+        if: ${{ always() && steps.junit-privacy.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: pytest-python-${{ matrix.python-version }}

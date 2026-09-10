@@ -6,8 +6,8 @@ Read `AGENTS.md` and `CONTEXT.md` first, then inspect the ADRs linked below.
 ## Baseline
 
 - Product: Saga & Seeker Skill Editor
-- Application version: `2.0.2`
-- Release series represented by this source tree: `v2.0.2`
+- Application version: `2.1.0`
+- Release series represented by this source tree: `v2.1.0`
 - Repository: `https://github.com/shirogitsune-lab/saga-seeker-skill-editor`
 - Default branch: `main`
 - License: MIT for the source code, bundled canary artwork, and distributions
@@ -91,7 +91,7 @@ The original input file is not an in-place editing target. Safety and preservati
 ### Markdown Interchange
 
 - Writes canonical AI-oriented Markdown format v2. Application version
-  `2.0.2` and format version `2` are separate identifiers.
+  `2.1.0` and format version `2` are separate identifiers.
 - Exports the current rendered draft in-process; it does not launch or depend
   on the standalone Rust converter executable.
 - Preserves the standalone converter's important semantic output, including
@@ -278,7 +278,7 @@ The byte-preserving model, GUI, and save workflow are implemented:
 - Save validation compares every load-time read-only section's JSON bytes,
   HTML bytes, diagnostic codes, severity, counts, correspondence, and reason.
   Editable sections must remain valid after rendering.
-- The package metadata is `2.0.2`; the GUI title is
+- The package metadata is `2.1.0`; the GUI title is
   `Saga & Seeker キャラクターシートエディター`. Executable, repository, and
   Python-package names remain unchanged.
 - PyInstaller onedir and onefile definitions include the default WebP. The
@@ -416,6 +416,7 @@ The game-derived names and definition data in `data/personality_keywords.csv` an
 
 ## Current Maintenance State
 
+- `v2.1.0` adds bundled default-skill selection, pending edit-before-save behavior, exact DEFAULT/ORIGINAL save branching, and multiline LF normalization while retaining the existing protected-default replacement flow.
 - The `v2.0.2` changes were merged into `main` by PR #3. The main branch accepts
   the game's pipe-encoded memory tags while preserving genuine mismatch
   read-only behavior, original tag encoding, placeholders, JSON-only memories,

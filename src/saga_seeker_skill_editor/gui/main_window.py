@@ -70,6 +70,7 @@ from saga_seeker_skill_editor.core.sheet_editor import (
     render_empty_slot_creation,
     render_default_skill_selection,
     render_name_description_edit,
+    render_pending_default_original,
     render_protected_skill_replacement,
     render_skill_deletion,
     render_vacant_slot_creation,
@@ -1301,6 +1302,16 @@ class MainWindow(QMainWindow):
                     current_sheet,
                     index=state.index,
                     skill=state.default_skill,
+                )
+            elif (
+                state.pending_default_original
+                and current_sheet.entries[state.index].classification.kind == SkillKind.DEFAULT
+            ):
+                current = render_pending_default_original(
+                    current_sheet,
+                    index=state.index,
+                    name=state.name,
+                    description=state.description,
                 )
             elif state.replacement_confirmed:
                 current = render_protected_skill_replacement(

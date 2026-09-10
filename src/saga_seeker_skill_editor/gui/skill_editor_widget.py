@@ -44,6 +44,13 @@ class SkillEditState:
     deletion_requested: bool
     vacant_creation: bool
     default_skill: DefaultSkill | None
+    pending_default_original: bool
+
+
+def normalize_pending_skill_text(value: str) -> str:
+    """Normalize editor newlines before comparing a pending catalog selection."""
+
+    return value.replace("\r\n", "\n").replace("\r", "\n")
 
 
 class DefaultSkillSelectionDialog(QDialog):
@@ -197,8 +204,12 @@ class SkillEditorWidget(QFrame):
         self.selected_default: DefaultSkill | None = None
         self.setObjectName("editorPanel")
 
-        self.original_name = str(entry.skill.get("name", "") or "")
-        self.original_description = str(entry.skill.get("description", "") or "")
+        self.original_name = normalize_pending_skill_text(
+            str(entry.skill.get("name", "") or "")
+        )
+        self.original_description = normalize_pending_skill_text(
+            str(entry.skill.get("description", "") or "")
+        )
 
         self.title = QLabel(self.original_name or "未設定のスキル")
         self.title.setObjectName("characterName")
@@ -233,7 +244,8 @@ class SkillEditorWidget(QFrame):
 
         self.name_edit = QLineEdit(self.original_name)
         self.name_edit.setAccessibleName("スキル名")
-        self.description_edit = QTextEdit(self.original_description)
+        self.description_edit = QTextEdit()
+        self.description_edit.setPlainText(self.original_description)
         self.description_edit.setAccessibleName("スキルの説明")
         self.description_edit.setMinimumHeight(180)
 
@@ -304,8 +316,16 @@ class SkillEditorWidget(QFrame):
         return content
 
     def state(self) -> SkillEditState:
-        name = self.name_edit.text()
-        description = self.description_edit.toPlainText()
+        name = normalize_pending_skill_text(self.name_edit.text())
+        description = normalize_pending_skill_text(self.description_edit.toPlainText())
+        pending_default_original = bool(
+            self.selected_default is not None
+            and (
+                name != normalize_pending_skill_text(self.selected_default.name)
+                or description
+                != normalize_pending_skill_text(self.selected_default.description)
+            )
+        )
         changed = (
             name != self.original_name
             or description != self.original_description
@@ -322,7 +342,8 @@ class SkillEditorWidget(QFrame):
             replacement_confirmed=self.replacement_confirmed,
             deletion_requested=self.deletion_requested,
             vacant_creation=False,
-            default_skill=self.selected_default,
+            default_skill=None if pending_default_original else self.selected_default,
+            pending_default_original=pending_default_original,
         )
 
     def prepare_for_save(self) -> bool:
@@ -333,6 +354,14 @@ class SkillEditorWidget(QFrame):
             return True
         if state.deletion_requested:
             return True
+        if state.pending_default_original and state.name == "":
+            QMessageBox.warning(
+                self,
+                "スキル名が必要です",
+                "オリジナルスキルとして保存するにはスキル名を入力してください。",
+            )
+            self.name_edit.setFocus()
+            return False
         if self.entry.classification.kind == SkillKind.ORIGINAL_NEEDS_ID_REPAIR and not self.repair_id_confirmed:
             result = QMessageBox.warning(
                 self,
@@ -358,6 +387,8 @@ class SkillEditorWidget(QFrame):
         self.name_edit.setEnabled(self._normally_editable())
         self.description_edit.setEnabled(self._normally_editable())
         self.reason_label.setText(self._reason_text())
+        self.kind_label.setText(self._kind_label())
+        self.protection_label.setText(self._protection_status())
         self._update_action_control()
         self._update_default_skill_button()
         self._on_value_changed()
@@ -370,6 +401,19 @@ class SkillEditorWidget(QFrame):
     def _on_value_changed(self) -> None:
         current_name = self.name_edit.text()
         self.title.setText(current_name or "未設定のスキル")
+        if self.selected_default is not None:
+            if self._pending_default_matches_catalog():
+                self.kind_label.setText("デフォルト候補（未確定）")
+                self.protection_label.setText("未確定・保護なし")
+                self.reason_label.setText(
+                    "保存時にカタログ正本と一致していれば、正規デフォルトとして5項目を確定します。"
+                )
+            else:
+                self.kind_label.setText("オリジナル予定")
+                self.protection_label.setText("保護なし")
+                self.reason_label.setText(
+                    "選択後に名前または説明が変更されたため、保存時はオリジナルスキルになります。"
+                )
         self.changed.emit()
 
     def _handle_action_button(self) -> None:
@@ -405,14 +449,22 @@ class SkillEditorWidget(QFrame):
         self.replacement_keep_text = False
         self.deletion_requested = False
         self.name_edit.setText(skill.name)
-        self.description_edit.setPlainText(skill.description)
-        self.name_edit.setEnabled(False)
-        self.description_edit.setEnabled(False)
-        self.reason_label.setText(
-            "選択したゲーム標準スキルの5項目を保存時にまとめて設定します。"
-        )
+        self.description_edit.setPlainText(normalize_pending_skill_text(skill.description))
+        self.name_edit.setEnabled(True)
+        self.description_edit.setEnabled(True)
+        self._on_value_changed()
         self._update_action_control()
         self.changed.emit()
+
+    def _pending_default_matches_catalog(self) -> bool:
+        if self.selected_default is None:
+            return False
+        return (
+            normalize_pending_skill_text(self.name_edit.text())
+            == normalize_pending_skill_text(self.selected_default.name)
+            and normalize_pending_skill_text(self.description_edit.toPlainText())
+            == normalize_pending_skill_text(self.selected_default.description)
+        )
 
     def _begin_replacement(self) -> None:
         mode = ReplacementModeDialog.ask(self)

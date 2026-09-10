@@ -11,6 +11,7 @@ from saga_seeker_skill_editor.core.sheet_editor import (
     render_empty_slot_creation,
     render_default_skill_selection,
     render_name_description_edit,
+    render_pending_default_original,
     render_protected_skill_replacement,
     render_skill_deletion,
     render_vacant_slot_creation,
@@ -268,6 +269,57 @@ def test_render_protected_skill_replacement_generates_unused_skn_and_loses_defau
     }
     assert rendered.entries[1].li.attrs["data-skill-id"] == "sk2"
     assert rendered.entries[1].li.attrs["data-skill-type"] == ""
+
+
+def test_render_pending_default_original_is_a_distinct_unconfirmed_transition() -> None:
+    existing = {
+        "id": "sk1",
+        "name": "Existing",
+        "description": "Keep",
+        "type": "",
+        "key": "",
+    }
+    default = {
+        "id": "42",
+        "name": "Saved Default",
+        "description": "Protected",
+        "type": "精神",
+        "key": "Default_Key",
+    }
+    existing_li = skill_li(existing)
+    default_li = skill_li(default).replace("<li ", '<li data-extra="must-stay" ')
+    sheet = load_character_sheet(
+        sheet_bytes([existing, default], existing_li + "\n" + default_li)
+    )
+    name = 'Edited "pending" & <choice> 日本語 😀'
+    description = 'Becomes original </script> "quoted" & <tag>\nsecond line'
+
+    updated = render_pending_default_original(
+        sheet,
+        index=1,
+        name=name,
+        description=description,
+    )
+    rendered = load_character_sheet(updated)
+
+    assert rendered.entries[0].skill == existing
+    assert rendered.entries[1].skill == {
+        "id": "sk2",
+        "name": name,
+        "description": description,
+        "type": "",
+        "key": "",
+    }
+    assert rendered.entries[1].li.attrs["data-skill-name"] == name
+    assert rendered.entries[1].li.attrs["data-skill-description"] == description
+    assert rendered.entries[1].li.attrs["data-extra"] == "must-stay"
+    assert existing_li.encode("utf-8") in updated
+    assert b'<div id="profile">must stay</div>' in updated
+    assert b"BASE64_MUST_STAY" in updated
+    script_bytes = updated[
+        rendered.script_span.content_start : rendered.script_span.content_end
+    ].lower()
+    assert b"</script>" not in script_bytes
 
 
 def test_render_default_skill_selection_replaces_original_with_exact_catalog_record() -> None:

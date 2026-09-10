@@ -48,10 +48,12 @@ The original input file is not an in-place editing target. Safety and preservati
 - Blocks saving when manual additions leave a gap before a later populated slot.
 - Selects from the exact bundled 96-skill game catalog by name/description search and type filter.
 - Applies a selected default skill's `id`, `name`, `description`, `type`, and `key` together without inferring or normalizing `key`.
+- Keeps a catalog choice pending and editable until save. Matching normalized name/description confirms the exact default identity; changed text saves as an original skill.
+- Clears pending state after a successful save and establishes the resulting default or original as the new clean baseline.
 - Supports original-to-default, default-to-default, explicit-empty-to-default, and trailing-vacant-to-default changes while keeping UNKNOWN entries read-only.
 - Deletes a middle registered skill by replacing it with an explicit empty skill.
 - Deletes the tail registered skill by removing its data object and returning the HTML position to a vacant slot.
-- Replaces a protected default skill with an original skill through an advanced, two-confirmation operation.
+- Replaces an already saved protected default skill with an original skill through an advanced, two-confirmation operation. Editing an unsaved pending catalog choice does not use this path.
 - Offers either blank content or retained name/description when replacing a default skill.
 - Requests explicit consent before repairing the ID of an edited original skill.
 

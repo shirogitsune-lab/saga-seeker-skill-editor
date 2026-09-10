@@ -7,10 +7,12 @@ from dataclasses import dataclass
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
     QFrame,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -18,11 +20,14 @@ from PySide6.QtWidgets import (
     QPushButton,
     QRadioButton,
     QTextEdit,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from saga_seeker_skill_editor.core.character_sheet import SkillEntry
+from saga_seeker_skill_editor.core.default_skill_catalog import DefaultSkill
 from saga_seeker_skill_editor.core.skill_classifier import SkillKind
 from saga_seeker_skill_editor.gui.collapsible_section import CollapsibleSection
 from saga_seeker_skill_editor.gui.theme_manager import refresh_widget_style
@@ -38,6 +43,131 @@ class SkillEditState:
     replacement_confirmed: bool
     deletion_requested: bool
     vacant_creation: bool
+    default_skill: DefaultSkill | None
+
+
+class DefaultSkillSelectionDialog(QDialog):
+    TYPE_FILTERS = ("すべて", "肉体", "精神", "社会")
+
+    def __init__(
+        self,
+        catalog: tuple[DefaultSkill, ...],
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.catalog = catalog
+        self.catalog_by_id = {skill.id: skill for skill in catalog}
+        self.setWindowTitle("デフォルトスキルを選択")
+        self.setModal(True)
+        self.resize(920, 620)
+
+        self.search_edit = QLineEdit()
+        self.search_edit.setAccessibleName("デフォルトスキルを検索")
+        self.search_edit.setPlaceholderText("スキル名または説明を部分一致で検索")
+        self.search_edit.setClearButtonEnabled(True)
+        search_label = QLabel("検索")
+        search_label.setBuddy(self.search_edit)
+
+        self.type_filter = QComboBox()
+        self.type_filter.addItems(self.TYPE_FILTERS)
+        self.type_filter.setAccessibleName("スキル種別で絞り込み")
+        type_label = QLabel("種別")
+        type_label.setBuddy(self.type_filter)
+
+        filters = QHBoxLayout()
+        filters.addWidget(search_label)
+        filters.addWidget(self.search_edit, 1)
+        filters.addWidget(type_label)
+        filters.addWidget(self.type_filter)
+
+        self.result_count_label = QLabel()
+        self.result_count_label.setObjectName("mutedText")
+        self.results = QTreeWidget()
+        self.results.setAccessibleName("デフォルトスキル候補")
+        self.results.setColumnCount(3)
+        self.results.setHeaderLabels(["名前", "種別", "説明"])
+        self.results.setRootIsDecorated(False)
+        self.results.setUniformRowHeights(True)
+        header = self.results.header()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        self.select_button = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self.select_button.setText("このスキルを設定")
+        self.select_button.setEnabled(False)
+        self.buttons.rejected.connect(self.reject)
+        self.buttons.accepted.connect(self.accept)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(filters)
+        layout.addWidget(self.result_count_label)
+        layout.addWidget(self.results, 1)
+        layout.addWidget(self.buttons)
+
+        self.search_edit.textChanged.connect(self._rebuild_results)
+        self.type_filter.currentTextChanged.connect(self._rebuild_results)
+        self.results.currentItemChanged.connect(self._selection_changed)
+        self.results.itemDoubleClicked.connect(self._activate_item)
+        self._rebuild_results()
+        self.search_edit.setFocus()
+
+    def selected_skill(self) -> DefaultSkill | None:
+        item = self.results.currentItem()
+        if item is None:
+            return None
+        return self.catalog_by_id.get(item.data(0, Qt.ItemDataRole.UserRole))
+
+    def _rebuild_results(self, _value: str = "") -> None:
+        query = self.search_edit.text().strip().casefold()
+        skill_type = self.type_filter.currentText()
+        matches = [
+            skill
+            for skill in self.catalog
+            if (skill_type == "すべて" or skill.type == skill_type)
+            and (
+                not query
+                or query in skill.name.casefold()
+                or query in skill.description.casefold()
+            )
+        ]
+        self.results.clear()
+        for skill in matches:
+            item = QTreeWidgetItem([skill.name, skill.type, skill.description])
+            item.setData(0, Qt.ItemDataRole.UserRole, skill.id)
+            item.setToolTip(0, f"{skill.name} / {skill.type}")
+            item.setToolTip(2, skill.description)
+            self.results.addTopLevelItem(item)
+        self.result_count_label.setText(f"{len(matches)}件")
+        if matches:
+            self.results.setCurrentItem(self.results.topLevelItem(0))
+        else:
+            self.select_button.setEnabled(False)
+
+    def _selection_changed(
+        self,
+        current: QTreeWidgetItem | None,
+        _previous: QTreeWidgetItem | None,
+    ) -> None:
+        self.select_button.setEnabled(current is not None)
+
+    def _activate_item(self, item: QTreeWidgetItem, _column: int) -> None:
+        if item is not None:
+            self.accept()
+
+    @classmethod
+    def ask(
+        cls,
+        parent: QWidget | None,
+        catalog: tuple[DefaultSkill, ...],
+    ) -> DefaultSkill | None:
+        dialog = cls(catalog, parent)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.selected_skill()
 
 
 class SkillEditorWidget(QFrame):
@@ -49,17 +179,22 @@ class SkillEditorWidget(QFrame):
         *,
         is_last_entry: bool = False,
         read_only_reason: str | None = None,
+        default_catalog: tuple[DefaultSkill, ...] = (),
+        default_catalog_error: str = "",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.entry = entry
         self.is_last_entry = is_last_entry
         self.read_only_reason = read_only_reason
+        self.default_catalog = default_catalog
+        self.default_catalog_error = default_catalog_error
         self.repair_id_confirmed = False
         self.replacement_confirmed = False
         self.replacement_keep_text = False
         self.deletion_requested = False
         self.deletion_available = True
+        self.selected_default: DefaultSkill | None = None
         self.setObjectName("editorPanel")
 
         self.original_name = str(entry.skill.get("name", "") or "")
@@ -91,6 +226,11 @@ class SkillEditorWidget(QFrame):
         self.reason_label.setWordWrap(True)
         self.reason_label.setObjectName("mutedText")
 
+        self.default_skill_button = QPushButton("デフォルトスキルを選択…")
+        self.default_skill_button.setAccessibleName("デフォルトスキルを選択")
+        self.default_skill_button.clicked.connect(self._choose_default_skill)
+        self._update_default_skill_button()
+
         self.name_edit = QLineEdit(self.original_name)
         self.name_edit.setAccessibleName("スキル名")
         self.description_edit = QTextEdit(self.original_description)
@@ -116,6 +256,7 @@ class SkillEditorWidget(QFrame):
         layout.addLayout(heading_text)
         layout.addLayout(badges)
         layout.addWidget(self.reason_label)
+        layout.addWidget(self.default_skill_button, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addSpacing(4)
         layout.addLayout(form)
         layout.addStretch(1)
@@ -170,6 +311,7 @@ class SkillEditorWidget(QFrame):
             or description != self.original_description
             or self.replacement_confirmed
             or self.deletion_requested
+            or self.selected_default is not None
         )
         return SkillEditState(
             index=self.entry.index,
@@ -180,11 +322,14 @@ class SkillEditorWidget(QFrame):
             replacement_confirmed=self.replacement_confirmed,
             deletion_requested=self.deletion_requested,
             vacant_creation=False,
+            default_skill=self.selected_default,
         )
 
     def prepare_for_save(self) -> bool:
         state = self.state()
         if not state.changed:
+            return True
+        if state.default_skill is not None:
             return True
         if state.deletion_requested:
             return True
@@ -207,12 +352,14 @@ class SkillEditorWidget(QFrame):
         self.replacement_confirmed = False
         self.replacement_keep_text = False
         self.deletion_requested = False
+        self.selected_default = None
         self.name_edit.setText(self.original_name)
         self.description_edit.setPlainText(self.original_description)
         self.name_edit.setEnabled(self._normally_editable())
         self.description_edit.setEnabled(self._normally_editable())
         self.reason_label.setText(self._reason_text())
         self._update_action_control()
+        self._update_default_skill_button()
         self._on_value_changed()
 
     def set_change_indicator(self, changed: bool) -> None:
@@ -226,6 +373,9 @@ class SkillEditorWidget(QFrame):
         self.changed.emit()
 
     def _handle_action_button(self) -> None:
+        if self.selected_default is not None:
+            self.reset()
+            return
         if self.deletion_requested:
             self._cancel_deletion()
             return
@@ -244,6 +394,25 @@ class SkillEditorWidget(QFrame):
             self._begin_replacement()
             return
         self._begin_deletion()
+
+    def _choose_default_skill(self) -> None:
+        skill = DefaultSkillSelectionDialog.ask(self, self.default_catalog)
+        if skill is None:
+            return
+        self.selected_default = skill
+        self.repair_id_confirmed = False
+        self.replacement_confirmed = False
+        self.replacement_keep_text = False
+        self.deletion_requested = False
+        self.name_edit.setText(skill.name)
+        self.description_edit.setPlainText(skill.description)
+        self.name_edit.setEnabled(False)
+        self.description_edit.setEnabled(False)
+        self.reason_label.setText(
+            "選択したゲーム標準スキルの5項目を保存時にまとめて設定します。"
+        )
+        self._update_action_control()
+        self.changed.emit()
 
     def _begin_replacement(self) -> None:
         mode = ReplacementModeDialog.ask(self)
@@ -306,7 +475,11 @@ class SkillEditorWidget(QFrame):
     def _update_action_control(self) -> None:
         if not hasattr(self, "action_button"):
             return
-        if self.deletion_requested:
+        if self.selected_default is not None:
+            text = "デフォルトスキル選択を取り消す"
+            explanation = "保存前であれば、選択を取り消して読み込み時の内容へ戻せます。"
+            visible = True
+        elif self.deletion_requested:
             text = "削除予定を取り消す"
             explanation = (
                 "保存前であれば、この削除予定を取り消して元のスキルへ戻せます。"
@@ -358,6 +531,24 @@ class SkillEditorWidget(QFrame):
             and self.entry.classification.kind != SkillKind.UNKNOWN
         )
         self.advanced_explanation.setText(explanation)
+
+    def _update_default_skill_button(self) -> None:
+        enabled = bool(
+            self.default_catalog
+            and self.read_only_reason is None
+            and self.entry.classification.kind != SkillKind.UNKNOWN
+        )
+        self.default_skill_button.setEnabled(enabled)
+        if self.default_catalog_error:
+            self.default_skill_button.setToolTip(self.default_catalog_error)
+        elif self.read_only_reason is not None:
+            self.default_skill_button.setToolTip(f"読み取り専用: {self.read_only_reason}")
+        elif self.entry.classification.kind == SkillKind.UNKNOWN:
+            self.default_skill_button.setToolTip("安全に分類できないスキルは変換できません。")
+        else:
+            self.default_skill_button.setToolTip(
+                "ゲーム標準の96件から名前と説明を確認して選択します。"
+            )
 
     def _normally_editable(self) -> bool:
         return bool(

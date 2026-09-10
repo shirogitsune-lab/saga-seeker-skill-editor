@@ -34,6 +34,10 @@ _Avoid_: Filled row
 A game-provided skill whose game identity is protected from ordinary name and description editing.
 _Avoid_: Locked original skill
 
+**Default skill catalog（デフォルトスキルカタログ）**:
+The exact supported set of 96 game-defined skill records. Each record carries `id`, `name`, `description`, `type`, and `key`; these fields are copied as one identity and `key` is never inferred from the other fields.
+_Avoid_: Generated skill catalog, inferred key map
+
 **Original skill（オリジナルスキル）**:
 A player-created or game-AI-generated skill with a non-empty name and no default-skill type or key identity.
 _Avoid_: `skN` skill, custom-ID skill
@@ -53,6 +57,8 @@ _Avoid_: Empty skill, 空スロット
 **Protected replacement（デフォルトスキルの置き換え）**:
 The destructive conversion of a default skill into a new original skill, discarding the original default identity.
 _Avoid_: Unlock, unprotect
+
+Selecting another catalog default is an identity-to-identity replacement, not a protected replacement into an original skill.
 
 **Skill ID（スキルID）**:
 An exact, case-sensitive textual identity attached to a registered skill; its spelling or format alone does not determine the skill kind.

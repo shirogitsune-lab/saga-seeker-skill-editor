@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from saga_seeker_skill_editor.core.character_sheet import CharacterSheet, load_character_sheet
+from saga_seeker_skill_editor.core.default_skill_catalog import DefaultSkill
 from saga_seeker_skill_editor.core.html_li_patcher import (
     LiSkillPatch,
     LiTextPatch,
@@ -142,6 +143,82 @@ def render_protected_skill_replacement(
     ]
     updated = apply_replacements(sheet.raw_html, replacements)
     _validate_rendered(updated, index=index, expected_name=name, expected_description=description)
+    return updated
+
+
+def render_default_skill_selection(
+    sheet: CharacterSheet,
+    *,
+    index: int,
+    skill: DefaultSkill,
+) -> bytes:
+    """Replace one safe skill slot with an exact game-defined default record."""
+
+    if sheet.read_only:
+        raise SheetEditError(f"sheet is read-only: {sheet.read_only_reason}")
+    if index < 0 or index > len(sheet.entries):
+        raise SheetEditError("skill index is out of range")
+
+    json_bytes = sheet.raw_html[sheet.script_span.content_start : sheet.script_span.content_end]
+    spans = locate_skills_array(json_bytes)
+    if len(spans.skill_objects) != len(sheet.entries):
+        raise SheetEditError("located JSON skill object count does not match loaded entries")
+
+    replacement_object = dumps_script_safe(skill.as_dict(), indent=8)
+    patch = LiSkillPatch(
+        skill_id=skill.id,
+        name=skill.name,
+        skill_type=skill.type,
+        description=skill.description,
+    )
+    if index == len(sheet.entries):
+        if not sheet.vacant_lis:
+            raise SheetEditError("sheet has no vacant skill slot")
+        json_replacement = _append_skill_object_replacement(
+            sheet,
+            json_bytes,
+            spans,
+            replacement_object,
+        )
+        target_li = sheet.vacant_lis[0]
+        patched_li = build_new_skill_li(patch)
+    else:
+        entry = sheet.entries[index]
+        if entry.classification.kind == SkillKind.UNKNOWN:
+            raise SheetEditError("unrecognized skills cannot be changed to a default skill")
+        object_span = spans.skill_objects[index]
+        json_replacement = Replacement(
+            sheet.script_span.content_start + object_span.start,
+            sheet.script_span.content_start + object_span.end,
+            replacement_object,
+        )
+        target_li = entry.li
+        if entry.classification.kind == SkillKind.EMPTY_SLOT:
+            patched_li = build_new_skill_li(patch)
+        else:
+            patched_li = build_patched_skill_li(sheet.raw_html, target_li, patch)
+
+    updated = apply_replacements(
+        sheet.raw_html,
+        [
+            json_replacement,
+            Replacement(target_li.start, target_li.end, patched_li),
+        ],
+    )
+    rendered = load_character_sheet(updated)
+    if rendered.read_only:
+        raise SheetEditError(f"rendered sheet is read-only: {rendered.read_only_reason}")
+    if rendered.entries[index].skill != skill.as_dict():
+        raise SheetEditError("rendered JSON skill does not match the selected catalog record")
+    rendered_li = rendered.entries[index].li
+    expected_html = {
+        "data-skill-id": skill.id,
+        "data-skill-name": skill.name,
+        "data-skill-type": skill.type,
+        "data-skill-description": skill.description,
+    }
+    if any(rendered_li.attrs.get(name) != value for name, value in expected_html.items()):
+        raise SheetEditError("rendered HTML skill does not match the selected catalog record")
     return updated
 
 

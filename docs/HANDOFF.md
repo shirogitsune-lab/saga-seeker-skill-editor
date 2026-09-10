@@ -46,6 +46,9 @@ The original input file is not an in-place editing target. Safety and preservati
 - Adds manual original skills to explicit empty skills or trailing vacant slots.
 - Allows drafting multiple vacant-slot additions before one save.
 - Blocks saving when manual additions leave a gap before a later populated slot.
+- Selects from the exact bundled 96-skill game catalog by name/description search and type filter.
+- Applies a selected default skill's `id`, `name`, `description`, `type`, and `key` together without inferring or normalizing `key`.
+- Supports original-to-default, default-to-default, explicit-empty-to-default, and trailing-vacant-to-default changes while keeping UNKNOWN entries read-only.
 - Deletes a middle registered skill by replacing it with an explicit empty skill.
 - Deletes the tail registered skill by removing its data object and returning the HTML position to a vacant slot.
 - Replaces a protected default skill with an original skill through an advanced, two-confirmation operation.
@@ -288,6 +291,7 @@ The byte-preserving model, GUI, and save workflow are implemented:
 | Sheet loading | `core/character_sheet.py`, `core/html_locator.py`, `core/json_span.py` | Locate embedded data and direct HTML slots |
 | Skill semantics | `core/skill_classifier.py` | Fixed-order skill classification and ID generation |
 | Skill rendering | `core/sheet_editor.py`, `core/json_token_patcher.py`, `core/html_li_patcher.py` | Targeted byte-preserving edits |
+| Default skill catalog | `core/default_skill_catalog.py`, `data/default_skills.csv` | Load and validate all five catalog fields for the exact 96 records |
 | Personality catalog | `core/personality_catalog.py`, `data/personality_keywords.csv` | Load and validate all four catalog fields |
 | Personality rendering | `core/personality_editor.py` | Targeted selection, order, append, and removal edits |
 | Markdown interchange | `core/markdown_interchange.py` | Lossy semantic export, conservative fixed-heading import, new-sheet projection |
@@ -406,7 +410,7 @@ Not allowed:
 - Private fixtures
 - Generated EXEs and build output
 
-The game-derived names and classification data in `data/personality_keywords.csv` are explicitly excluded from the repository's MIT grant as described in `README.md`.
+The game-derived names and definition data in `data/personality_keywords.csv` and `data/default_skills.csv` are explicitly excluded from the repository's MIT grant as described in `README.md`.
 
 ## Current Maintenance State
 

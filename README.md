@@ -42,6 +42,8 @@ PySide6による5タブ構成の画面です。
 
 すべてのスキル枠を一覧表示し、未使用枠には複数のスキルをまとめて入力できます。途中の枠を空けたまま後ろの枠へ入力すると整合性エラーを表示し、手前から連続する状態へ修正されるまで保存を止めます。
 
+各スキル枠の「デフォルトスキルを選択…」から、同梱されたゲーム内96件のカタログを名前・説明文で検索し、「肉体」「精神」「社会」で絞り込めます。選択すると、その枠の`id`、`name`、`description`、`type`、`key`をカタログの値へまとめて置き換えます。`key`を名前などから推測・補正することはありません。キャンセルだけでは変更扱いにならず、「リセット」で読込み時の内容へ戻せます。
+
 スキルの削除やデフォルトスキルの置き換えは「高度な操作」に分離されています。リスト途中のスキルを削除する場合は、位置対応を維持するため空スキルへ置き換えます。末尾のスキルを削除する場合は、ゲームが自動追加に使用できる未使用枠へ戻します。
 
 主なキーボードショートカット:
@@ -181,7 +183,7 @@ Pythonが3.11以上であることを検証します。固定した上限はな�
 
 元のWebPアイコンは`assets/カナリア.webp`にあります。パッケージ作成前に`scripts/convert_icon.py`を実行すると、`assets/kanaria.ico`を生成します。
 
-`SagaSeekerSkillEditor.spec`はEXEアイコンを設定し、onefile版へ`gui/styles/*.qss`、性格キーワードカタログ、新規シート用の既定WebP画像を同梱します。ビルドスクリプトはonedir版にも同じリソースを含めます。PyInstallerのonefile実行時に使用される`_MEIPASS`を含め、リソースパスの解決は一か所へ集約しています。
+`SagaSeekerSkillEditor.spec`はEXEアイコンを設定し、onefile版へ`gui/styles/*.qss`、性格キーワードカタログ、デフォルトスキルカタログ、新規シート用の既定WebP画像を同梱します。ビルドスクリプトはonedir版にも同じリソースを含めます。PyInstallerのonefile実行時に使用される`_MEIPASS`を含め、リソースパスの解決は一か所へ集約しています。
 
 ビルドスクリプトは成功後、正本HTMLが参照する20枚の正式画像をdata URLへ変換し、自己完結型の`使い方.html`を生成します。onedirでは実行ファイルと同じディレクトリ、onefileビルドではRelease別添付用として`dist/`直下が出力先です。`scripts/package_release_assets.py`はonefile EXE、onedir ZIP、単体ガイド、`SHA256SUMS.txt`からなる最終候補を組み立て、ZIP内ガイドとの同一性とチェックサムを検証します。正式画像の再生成条件と匿名性監査は`docs/user-guide/SCREENSHOT_WORKFLOW.md`および
 `docs/user-guide/SCREENSHOT_AUDIT.md`に記録しています。
@@ -209,7 +211,7 @@ tests/private_fixtures/
 
 ## ライセンスと権利表記
 
-このプロジェクトは[MIT License](LICENSE)で公開されています。ライセンスはソースコード、同梱のカナリア画像、配布EXEに適用されます。`data/personality_keywords.csv`のゲーム由来の名称・分類データはMIT Licenseの対象に含めません。
+このプロジェクトは[MIT License](LICENSE)で公開されています。ライセンスはソースコード、同梱のカナリア画像、配布EXEに適用されます。`data/personality_keywords.csv`と`data/default_skills.csv`のゲーム由来の名称・説明・定義データはMIT Licenseの対象に含めません。
 
 Saga & Seeker、そのゲーム内容、関連する名称の権利は、それぞれの権利者に帰属します。本プロジェクトは相互運用を目的とした非公式ツールであり、ゲームの開発元または販売元との提携や公認を示すものではありません。互換性のために必要な性格キーワード対応表を除き、キャラクターシートHTMLなどのゲーム由来コンテンツは本リポジトリで配布しません。
 

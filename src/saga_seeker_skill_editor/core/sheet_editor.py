@@ -249,7 +249,7 @@ def render_default_skill_selection(
             replacement_object,
         )
         target_li = entry.li
-        if entry.classification.kind == SkillKind.EMPTY_SLOT:
+        if entry.classification.kind == SkillKind.EMPTY_SLOT and not target_li.attrs:
             patched_li = build_new_skill_li(patch)
         else:
             patched_li = build_patched_skill_li(sheet.raw_html, target_li, patch)

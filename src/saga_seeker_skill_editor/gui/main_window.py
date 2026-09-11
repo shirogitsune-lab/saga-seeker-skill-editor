@@ -1294,16 +1294,15 @@ class MainWindow(QMainWindow):
         except CharacterSheetRenderError as exc:
             raise SheetEditError(str(exc)) from exc
         for state in states:
-            if not state.changed or state.deletion_requested or state.vacant_creation:
+            if (
+                not state.changed
+                or state.deletion_requested
+                or state.vacant_creation
+                or state.default_skill is not None
+            ):
                 continue
             current_sheet = load_character_sheet(current)
-            if state.default_skill is not None:
-                current = render_default_skill_selection(
-                    current_sheet,
-                    index=state.index,
-                    skill=state.default_skill,
-                )
-            elif (
+            if (
                 state.pending_default_original
                 and current_sheet.entries[state.index].classification.kind == SkillKind.DEFAULT
             ):
@@ -1337,6 +1336,19 @@ class MainWindow(QMainWindow):
                     description=state.description,
                     repair_id_confirmed=state.repair_id_confirmed,
                 )
+        for state in states:
+            if (
+                not state.changed
+                or state.deletion_requested
+                or state.vacant_creation
+                or state.default_skill is None
+            ):
+                continue
+            current = render_default_skill_selection(
+                load_character_sheet(current),
+                index=state.index,
+                skill=state.default_skill,
+            )
         for state in states:
             if state.changed and state.deletion_requested:
                 current = render_skill_deletion(load_character_sheet(current), index=state.index)

@@ -6,8 +6,8 @@ Read `AGENTS.md` and `CONTEXT.md` first, then inspect the ADRs linked below.
 ## Baseline
 
 - Product: Saga & Seeker Skill Editor
-- Application version: `2.0.2`
-- Release series represented by this source tree: `v2.0.2`
+- Application version: `2.1.0`
+- Release series represented by this source tree: `v2.1.0`
 - Repository: `https://github.com/shirogitsune-lab/saga-seeker-skill-editor`
 - Default branch: `main`
 - License: MIT for the source code, bundled canary artwork, and distributions
@@ -46,9 +46,14 @@ The original input file is not an in-place editing target. Safety and preservati
 - Adds manual original skills to explicit empty skills or trailing vacant slots.
 - Allows drafting multiple vacant-slot additions before one save.
 - Blocks saving when manual additions leave a gap before a later populated slot.
+- Selects from the exact bundled 96-skill game catalog by name/description search and type filter.
+- Applies a selected default skill's `id`, `name`, `description`, `type`, and `key` together without inferring or normalizing `key`.
+- Keeps a catalog choice pending and editable until save. Matching normalized name/description confirms the exact default identity; changed text saves as an original skill.
+- Clears pending state after a successful save and establishes the resulting default or original as the new clean baseline.
+- Supports original-to-default, default-to-default, explicit-empty-to-default, and trailing-vacant-to-default changes while keeping UNKNOWN entries read-only.
 - Deletes a middle registered skill by replacing it with an explicit empty skill.
 - Deletes the tail registered skill by removing its data object and returning the HTML position to a vacant slot.
-- Replaces a protected default skill with an original skill through an advanced, two-confirmation operation.
+- Replaces an already saved protected default skill with an original skill through an advanced, two-confirmation operation. Editing an unsaved pending catalog choice does not use this path.
 - Offers either blank content or retained name/description when replacing a default skill.
 - Requests explicit consent before repairing the ID of an edited original skill.
 
@@ -86,7 +91,7 @@ The original input file is not an in-place editing target. Safety and preservati
 ### Markdown Interchange
 
 - Writes canonical AI-oriented Markdown format v2. Application version
-  `2.0.2` and format version `2` are separate identifiers.
+  `2.1.0` and format version `2` are separate identifiers.
 - Exports the current rendered draft in-process; it does not launch or depend
   on the standalone Rust converter executable.
 - Preserves the standalone converter's important semantic output, including
@@ -273,7 +278,7 @@ The byte-preserving model, GUI, and save workflow are implemented:
 - Save validation compares every load-time read-only section's JSON bytes,
   HTML bytes, diagnostic codes, severity, counts, correspondence, and reason.
   Editable sections must remain valid after rendering.
-- The package metadata is `2.0.2`; the GUI title is
+- The package metadata is `2.1.0`; the GUI title is
   `Saga & Seeker キャラクターシートエディター`. Executable, repository, and
   Python-package names remain unchanged.
 - PyInstaller onedir and onefile definitions include the default WebP. The
@@ -288,6 +293,7 @@ The byte-preserving model, GUI, and save workflow are implemented:
 | Sheet loading | `core/character_sheet.py`, `core/html_locator.py`, `core/json_span.py` | Locate embedded data and direct HTML slots |
 | Skill semantics | `core/skill_classifier.py` | Fixed-order skill classification and ID generation |
 | Skill rendering | `core/sheet_editor.py`, `core/json_token_patcher.py`, `core/html_li_patcher.py` | Targeted byte-preserving edits |
+| Default skill catalog | `core/default_skill_catalog.py`, `data/default_skills.csv` | Load and validate all five catalog fields for the exact 96 records |
 | Personality catalog | `core/personality_catalog.py`, `data/personality_keywords.csv` | Load and validate all four catalog fields |
 | Personality rendering | `core/personality_editor.py` | Targeted selection, order, append, and removal edits |
 | Markdown interchange | `core/markdown_interchange.py` | Lossy semantic export, conservative fixed-heading import, new-sheet projection |
@@ -406,10 +412,11 @@ Not allowed:
 - Private fixtures
 - Generated EXEs and build output
 
-The game-derived names and classification data in `data/personality_keywords.csv` are explicitly excluded from the repository's MIT grant as described in `README.md`.
+The game-derived names and definition data in `data/personality_keywords.csv` and `data/default_skills.csv` are explicitly excluded from the repository's MIT grant as described in `README.md`.
 
 ## Current Maintenance State
 
+- `v2.1.0` adds bundled default-skill selection, pending edit-before-save behavior, exact DEFAULT/ORIGINAL save branching, and multiline LF normalization while retaining the existing protected-default replacement flow.
 - The `v2.0.2` changes were merged into `main` by PR #3. The main branch accepts
   the game's pipe-encoded memory tags while preserving genuine mismatch
   read-only behavior, original tag encoding, placeholders, JSON-only memories,

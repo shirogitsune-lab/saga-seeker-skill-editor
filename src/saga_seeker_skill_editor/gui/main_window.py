@@ -43,6 +43,10 @@ from saga_seeker_skill_editor.core.character_sheet import (
     validate_rendered_character_sheet,
 )
 from saga_seeker_skill_editor.core.file_writer import SaveError, atomic_save_bytes
+from saga_seeker_skill_editor.core.default_skill_catalog import (
+    DefaultSkillCatalogError,
+    load_default_skill_catalog,
+)
 from saga_seeker_skill_editor.core.markdown_interchange import (
     MarkdownFormatDetection,
     MarkdownFormatKind,
@@ -64,7 +68,9 @@ from saga_seeker_skill_editor.core.personality_editor import (
 from saga_seeker_skill_editor.core.sheet_editor import (
     SheetEditError,
     render_empty_slot_creation,
+    render_default_skill_selection,
     render_name_description_edit,
+    render_pending_default_original,
     render_protected_skill_replacement,
     render_skill_deletion,
     render_vacant_slot_creation,
@@ -271,6 +277,12 @@ class MainWindow(QMainWindow):
         except PersonalityCatalogError as exc:
             self.personality_catalog = ()
             self.personality_catalog_error = str(exc)
+        try:
+            self.default_skill_catalog = load_default_skill_catalog()
+            self.default_skill_catalog_error = ""
+        except DefaultSkillCatalogError as exc:
+            self.default_skill_catalog = ()
+            self.default_skill_catalog_error = str(exc)
         self.active_error: UiError | None = None
         self.validation_error: str | None = None
         self.changed_indices: set[int] = set()
@@ -1282,10 +1294,25 @@ class MainWindow(QMainWindow):
         except CharacterSheetRenderError as exc:
             raise SheetEditError(str(exc)) from exc
         for state in states:
-            if not state.changed or state.deletion_requested or state.vacant_creation:
+            if (
+                not state.changed
+                or state.deletion_requested
+                or state.vacant_creation
+                or state.default_skill is not None
+            ):
                 continue
             current_sheet = load_character_sheet(current)
-            if state.replacement_confirmed:
+            if (
+                state.pending_default_original
+                and current_sheet.entries[state.index].classification.kind == SkillKind.DEFAULT
+            ):
+                current = render_pending_default_original(
+                    current_sheet,
+                    index=state.index,
+                    name=state.name,
+                    description=state.description,
+                )
+            elif state.replacement_confirmed:
                 current = render_protected_skill_replacement(
                     current_sheet,
                     index=state.index,
@@ -1310,6 +1337,19 @@ class MainWindow(QMainWindow):
                     repair_id_confirmed=state.repair_id_confirmed,
                 )
         for state in states:
+            if (
+                not state.changed
+                or state.deletion_requested
+                or state.vacant_creation
+                or state.default_skill is None
+            ):
+                continue
+            current = render_default_skill_selection(
+                load_character_sheet(current),
+                index=state.index,
+                skill=state.default_skill,
+            )
+        for state in states:
             if state.changed and state.deletion_requested:
                 current = render_skill_deletion(load_character_sheet(current), index=state.index)
         for state in states:
@@ -1317,11 +1357,18 @@ class MainWindow(QMainWindow):
                 current_sheet = load_character_sheet(current)
                 if state.index != len(current_sheet.entries):
                     raise SheetEditError("skills must be added to vacant slots from the beginning")
-                current = render_vacant_slot_creation(
-                    current_sheet,
-                    name=state.name,
-                    description=state.description,
-                )
+                if state.default_skill is not None:
+                    current = render_default_skill_selection(
+                        current_sheet,
+                        index=state.index,
+                        skill=state.default_skill,
+                    )
+                else:
+                    current = render_vacant_slot_creation(
+                        current_sheet,
+                        name=state.name,
+                        description=state.description,
+                    )
         if self.personality_changed_indices:
             current = render_personality_selections(
                 load_character_sheet(current),
@@ -1346,6 +1393,8 @@ class MainWindow(QMainWindow):
                 entry,
                 is_last_entry=entry.index == len(self.sheet.entries) - 1,
                 read_only_reason=self.sheet.read_only_reason if self.sheet.read_only else None,
+                default_catalog=self.default_skill_catalog,
+                default_catalog_error=self.default_skill_catalog_error,
             )
             widget.changed.connect(self._recalculate_changes)
             self.skill_widgets.append(widget)
@@ -1355,6 +1404,8 @@ class MainWindow(QMainWindow):
                 slot_index,
                 creation_enabled=not self.sheet.read_only,
                 read_only_reason=self.sheet.read_only_reason if self.sheet.read_only else None,
+                default_catalog=self.default_skill_catalog,
+                default_catalog_error=self.default_skill_catalog_error,
             )
             widget.changed.connect(self._recalculate_changes)
             self.skill_widgets.append(widget)

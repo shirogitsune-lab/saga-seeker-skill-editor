@@ -8,7 +8,7 @@ from saga_seeker_skill_editor import __version__
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "2.0.2"
+EXPECTED_VERSION = "2.1.0"
 
 
 def test_application_version_is_consistent_across_current_release_metadata() -> None:

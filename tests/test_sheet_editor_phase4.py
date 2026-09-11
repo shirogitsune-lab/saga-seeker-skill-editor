@@ -5,10 +5,13 @@ import json
 import pytest
 
 from saga_seeker_skill_editor.core.character_sheet import load_character_sheet
+from saga_seeker_skill_editor.core.default_skill_catalog import DefaultSkill
 from saga_seeker_skill_editor.core.sheet_editor import (
     SheetEditError,
     render_empty_slot_creation,
+    render_default_skill_selection,
     render_name_description_edit,
+    render_pending_default_original,
     render_protected_skill_replacement,
     render_skill_deletion,
     render_vacant_slot_creation,
@@ -268,6 +271,177 @@ def test_render_protected_skill_replacement_generates_unused_skn_and_loses_defau
     assert rendered.entries[1].li.attrs["data-skill-type"] == ""
 
 
+def test_render_pending_default_original_is_a_distinct_unconfirmed_transition() -> None:
+    existing = {
+        "id": "sk1",
+        "name": "Existing",
+        "description": "Keep",
+        "type": "",
+        "key": "",
+    }
+    default = {
+        "id": "42",
+        "name": "Saved Default",
+        "description": "Protected",
+        "type": "精神",
+        "key": "Default_Key",
+    }
+    existing_li = skill_li(existing)
+    default_li = skill_li(default).replace("<li ", '<li data-extra="must-stay" ')
+    sheet = load_character_sheet(
+        sheet_bytes([existing, default], existing_li + "\n" + default_li)
+    )
+    name = 'Edited "pending" & <choice> 日本語 😀'
+    description = 'Becomes original </script> "quoted" & <tag>\nsecond line'
+
+    updated = render_pending_default_original(
+        sheet,
+        index=1,
+        name=name,
+        description=description,
+    )
+    rendered = load_character_sheet(updated)
+
+    assert rendered.entries[0].skill == existing
+    assert rendered.entries[1].skill == {
+        "id": "sk2",
+        "name": name,
+        "description": description,
+        "type": "",
+        "key": "",
+    }
+    assert rendered.entries[1].li.attrs["data-skill-name"] == name
+    assert rendered.entries[1].li.attrs["data-skill-description"] == description
+    assert rendered.entries[1].li.attrs["data-extra"] == "must-stay"
+    assert existing_li.encode("utf-8") in updated
+    assert b'<div id="profile">must stay</div>' in updated
+    assert b"BASE64_MUST_STAY" in updated
+    script_bytes = updated[
+        rendered.script_span.content_start : rendered.script_span.content_end
+    ].lower()
+    assert b"</script>" not in script_bytes
+
+
+def test_render_default_skill_selection_replaces_original_with_exact_catalog_record() -> None:
+    original = {
+        "id": "arbitrary-original-id",
+        "name": "Original",
+        "description": "Original description",
+        "type": "",
+        "key": "",
+        "target_unknown": "removed with replaced identity",
+    }
+    untouched = {
+        "id": "duplicate-compatible",
+        "name": "Untouched",
+        "description": "Must stay",
+        "type": "",
+        "key": "",
+        "unknown": {"must": "stay"},
+    }
+    selected = DefaultSkill(
+        id="17",
+        name="不死者の肉体",
+        description="ゲーム定義の説明",
+        type="肉体",
+        key="Shapeshifting",
+    )
+    target_li = skill_li(original).replace(">", ' data-extra="must-stay">', 1)
+    untouched_li = skill_li(untouched)
+    raw = sheet_bytes([original, untouched], target_li + "\n" + untouched_li)
+
+    updated = render_default_skill_selection(
+        load_character_sheet(raw),
+        index=0,
+        skill=selected,
+    )
+    rendered = load_character_sheet(updated)
+
+    assert rendered.entries[0].skill == selected.as_dict()
+    assert rendered.entries[0].li.attrs["data-skill-id"] == "17"
+    assert rendered.entries[0].li.attrs["data-skill-name"] == "不死者の肉体"
+    assert rendered.entries[0].li.attrs["data-skill-type"] == "肉体"
+    assert rendered.entries[0].li.attrs["data-skill-description"] == "ゲーム定義の説明"
+    assert rendered.entries[0].li.attrs["data-extra"] == "must-stay"
+    assert rendered.entries[1].skill == untouched
+    assert untouched_li.encode("utf-8") in updated
+    assert b"BASE64_MUST_STAY" in updated
+    assert b'<div id="profile">must stay</div>' in updated
+
+
+def test_render_default_skill_selection_replaces_every_field_of_another_default() -> None:
+    current = {
+        "id": "40",
+        "name": "Current",
+        "description": "Current description",
+        "type": "精神",
+        "key": "Current_Key",
+    }
+    selected = DefaultSkill(
+        id="65",
+        name="Selected",
+        description="Selected description",
+        type="社会",
+        key="Selected_Key",
+    )
+
+    updated = render_default_skill_selection(
+        load_character_sheet(sheet_bytes([current], skill_li(current))),
+        index=0,
+        skill=selected,
+    )
+
+    assert load_character_sheet(updated).entries[0].skill == selected.as_dict()
+
+
+def test_render_default_skill_selection_appends_to_first_vacant_slot_without_generating_skn() -> None:
+    existing = {
+        "id": "17",
+        "name": "Existing duplicate ID",
+        "description": "Position matching remains authoritative",
+        "type": "",
+        "key": "",
+    }
+    selected = DefaultSkill(
+        id="17",
+        name="不死者の肉体",
+        description="ゲーム定義の説明",
+        type="肉体",
+        key="Shapeshifting",
+    )
+    later_vacant = b"\n\t<li>&nbsp;</li>"
+    raw = sheet_bytes(
+        [existing],
+        skill_li(existing) + "\n  <li>&nbsp;</li>" + later_vacant.decode("ascii"),
+    )
+
+    updated = render_default_skill_selection(
+        load_character_sheet(raw),
+        index=1,
+        skill=selected,
+    )
+    rendered = load_character_sheet(updated)
+
+    assert [entry.skill for entry in rendered.entries] == [existing, selected.as_dict()]
+    assert rendered.vacant_slot_count == 1
+    assert later_vacant in updated
+
+
+def test_render_default_skill_selection_rejects_unknown_skill() -> None:
+    unknown = {
+        "id": "unknown",
+        "name": "",
+        "description": "Contradictory",
+        "type": "",
+        "key": "",
+    }
+    selected = DefaultSkill("1", "Default", "Description", "肉体", "Exact_Key")
+    sheet = load_character_sheet(sheet_bytes([unknown], skill_li(unknown)))
+
+    with pytest.raises(SheetEditError):
+        render_default_skill_selection(sheet, index=0, skill=selected)
+
+
 def test_default_replacement_preserves_unrepresented_vacant_slots_byte_for_byte() -> None:
     default = {
         "id": "21",
@@ -324,6 +498,29 @@ def test_render_empty_slot_creation_generates_unused_skn_and_replaces_blank_li()
     }
     assert rendered.entries[0].li.attrs["data-skill-id"] == "sk2"
     assert rendered.entries[1].skill == existing
+
+
+def test_render_default_skill_selection_replaces_explicit_empty_slot() -> None:
+    empty = {"id": "", "name": "", "description": "", "type": "", "key": ""}
+    selected = DefaultSkill(
+        id="8",
+        name="Catalog Default",
+        description="Five exact fields",
+        type="精神",
+        key="ExactKey",
+    )
+    sheet = load_character_sheet(sheet_bytes([empty], "<li>&nbsp;</li>"))
+
+    updated = render_default_skill_selection(sheet, index=0, skill=selected)
+    rendered = load_character_sheet(updated)
+
+    assert rendered.entries[0].skill == selected.as_dict()
+    assert rendered.entries[0].li.attrs == {
+        "data-skill-id": "8",
+        "data-skill-name": "Catalog Default",
+        "data-skill-type": "精神",
+        "data-skill-description": "Five exact fields",
+    }
 
 
 def test_render_empty_slot_creation_preserves_existing_li_indentation() -> None:

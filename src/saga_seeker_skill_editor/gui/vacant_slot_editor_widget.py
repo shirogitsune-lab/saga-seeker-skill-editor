@@ -10,12 +10,18 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPushButton,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from saga_seeker_skill_editor.gui.skill_editor_widget import SkillEditState
+from saga_seeker_skill_editor.core.default_skill_catalog import DefaultSkill
+from saga_seeker_skill_editor.gui.skill_editor_widget import (
+    DefaultSkillSelectionDialog,
+    SkillEditState,
+    normalize_pending_skill_text,
+)
 from saga_seeker_skill_editor.gui.theme_manager import refresh_widget_style
 
 
@@ -28,6 +34,8 @@ class VacantSlotEditorWidget(QFrame):
         *,
         creation_enabled: bool,
         read_only_reason: str | None = None,
+        default_catalog: tuple[DefaultSkill, ...] = (),
+        default_catalog_error: str = "",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -35,6 +43,9 @@ class VacantSlotEditorWidget(QFrame):
         self.read_only_reason = read_only_reason
         self.validation_error: str | None = None
         self.creation_enabled = creation_enabled
+        self.default_catalog = default_catalog
+        self.default_catalog_error = default_catalog_error
+        self.selected_default: DefaultSkill | None = None
         self.setObjectName("editorPanel")
 
         self.title = QLabel("未使用枠")
@@ -67,6 +78,9 @@ class VacantSlotEditorWidget(QFrame):
         self.description_edit = QTextEdit()
         self.description_edit.setAccessibleName("追加するスキルの説明")
         self.description_edit.setMinimumHeight(180)
+        self.default_skill_button = QPushButton("デフォルトスキルを選択…")
+        self.default_skill_button.setAccessibleName("デフォルトスキルを選択")
+        self.default_skill_button.clicked.connect(self._choose_default_skill)
 
         form = QFormLayout()
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
@@ -81,6 +95,7 @@ class VacantSlotEditorWidget(QFrame):
         layout.addLayout(heading)
         layout.addLayout(badges)
         layout.addWidget(self.reason_label)
+        layout.addWidget(self.default_skill_button, 0)
         layout.addSpacing(4)
         layout.addLayout(form)
         layout.addStretch(1)
@@ -90,21 +105,33 @@ class VacantSlotEditorWidget(QFrame):
         self.set_creation_available(creation_enabled)
 
     def state(self) -> SkillEditState:
-        name = self.name_edit.text()
-        description = self.description_edit.toPlainText()
+        name = normalize_pending_skill_text(self.name_edit.text())
+        description = normalize_pending_skill_text(self.description_edit.toPlainText())
+        pending_default_original = bool(
+            self.selected_default is not None
+            and (
+                name != normalize_pending_skill_text(self.selected_default.name)
+                or description
+                != normalize_pending_skill_text(self.selected_default.description)
+            )
+        )
         return SkillEditState(
             index=self.slot_index,
             name=name,
             description=description,
-            changed=name != "" or description != "",
+            changed=name != "" or description != "" or self.selected_default is not None,
             repair_id_confirmed=False,
             replacement_confirmed=False,
             deletion_requested=False,
             vacant_creation=True,
+            default_skill=None if pending_default_original else self.selected_default,
+            pending_default_original=pending_default_original,
         )
 
     def prepare_for_save(self) -> bool:
         state = self.state()
+        if state.default_skill is not None:
+            return True
         if not state.changed or state.name != "":
             return True
         QMessageBox.warning(
@@ -116,8 +143,12 @@ class VacantSlotEditorWidget(QFrame):
         return False
 
     def reset(self) -> None:
+        self.selected_default = None
         self.name_edit.clear()
         self.description_edit.clear()
+        self.kind_label.setText("未使用枠")
+        self.protection_label.setText("自動追加可")
+        self.set_creation_available(self.creation_enabled)
         self._on_value_changed()
 
     def set_change_indicator(self, changed: bool) -> None:
@@ -131,6 +162,15 @@ class VacantSlotEditorWidget(QFrame):
         self.creation_enabled = available
         self.name_edit.setEnabled(available)
         self.description_edit.setEnabled(available)
+        self.default_skill_button.setEnabled(available and bool(self.default_catalog))
+        if self.default_catalog_error:
+            self.default_skill_button.setToolTip(self.default_catalog_error)
+        elif self.read_only_reason is not None:
+            self.default_skill_button.setToolTip(f"読み取り専用: {self.read_only_reason}")
+        else:
+            self.default_skill_button.setToolTip(
+                "ゲーム標準の96件から名前と説明を確認して選択します。"
+            )
         self._refresh_reason()
 
     def set_validation_error(self, message: str | None) -> None:
@@ -143,6 +183,16 @@ class VacantSlotEditorWidget(QFrame):
             self.reason_label.setProperty("state", "error")
         elif self.read_only_reason is not None:
             self.reason_label.setText(f"読み取り専用: {self.read_only_reason}")
+            self.reason_label.setProperty("state", None)
+        elif self.selected_default is not None:
+            if self._pending_default_matches_catalog():
+                self.reason_label.setText(
+                    "保存時にカタログ正本と一致していれば、正規デフォルトとして5項目を確定します。"
+                )
+            else:
+                self.reason_label.setText(
+                    "選択後に名前または説明が変更されたため、保存時はオリジナルスキルになります。"
+                )
             self.reason_label.setProperty("state", None)
         elif self.creation_enabled:
             self.reason_label.setText(
@@ -157,4 +207,34 @@ class VacantSlotEditorWidget(QFrame):
 
     def _on_value_changed(self) -> None:
         self.title.setText(self.name_edit.text() or "未使用枠")
+        if self.selected_default is not None:
+            if self._pending_default_matches_catalog():
+                self.kind_label.setText("デフォルト候補（未確定）")
+                self.protection_label.setText("未確定・保護なし")
+            else:
+                self.kind_label.setText("オリジナル予定")
+                self.protection_label.setText("保護なし")
+            self._refresh_reason()
         self.changed.emit()
+
+    def _choose_default_skill(self) -> None:
+        skill = DefaultSkillSelectionDialog.ask(self, self.default_catalog)
+        if skill is None:
+            return
+        self.selected_default = skill
+        self.name_edit.setText(skill.name)
+        self.description_edit.setPlainText(normalize_pending_skill_text(skill.description))
+        self.name_edit.setEnabled(True)
+        self.description_edit.setEnabled(True)
+        self._on_value_changed()
+        self.changed.emit()
+
+    def _pending_default_matches_catalog(self) -> bool:
+        if self.selected_default is None:
+            return False
+        return (
+            normalize_pending_skill_text(self.name_edit.text())
+            == normalize_pending_skill_text(self.selected_default.name)
+            and normalize_pending_skill_text(self.description_edit.toPlainText())
+            == normalize_pending_skill_text(self.selected_default.description)
+        )

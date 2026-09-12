@@ -44,11 +44,18 @@ $env:PYTHONPATH = "src"
 取込プレビューは実ダイアログ、読み取り専用・保存完了・Markdown書出しは
 匿名一時ファイルに対する実際の製品操作で状態を作る。
 
-## 配布コピーの検証
+## 配布用ガイド
+
+編集用の正本は `docs/user-guide/index.html` と `user-guide-assets/` に分けて管理する。
+利用者へ配布するガイドは、必ず `scripts/package_user_guide.py` を通して生成する。
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\package_user_guide.py work\guide-package
 .\.venv\Scripts\python.exe -m pytest -q tests\test_user_guide.py
 ```
 
-正本 `index.html` と配布版 `使い方.html` は同一バイトでなければならない。
+生成される `使い方.html` は、20枚の画像をすべてHTML内へ埋め込んだ自己完結ファイルでなければならない。
+`user-guide-assets/` などの外部画像フォルダを配布先で必要とする状態にはしない。
+
+`onedir` 版と `onefile` 版のどちらを利用する場合も、利用者へ渡す使い方ガイドは同じ自己完結HTMLとする。
+配布物へ正本の `index.html` をそのままコピーせず、必ずパッケージ処理を経た単体HTMLを使用する。

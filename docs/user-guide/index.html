@@ -157,11 +157,12 @@
 </head>
 <body>
   <a class="skip-link" href="#main">本文へ移動</a>
+
   <header>
     <div>
-      <p class="eyebrow">非エンジニア向け・オフライン利用ガイド</p>
+      <p class="eyebrow">オフライン利用ガイド</p>
       <h1>Saga &amp; Seeker<br>キャラクターシートエディター</h1>
-      <p>既存のキャラクターシートを壊さずに確認・編集し、別名で保存するための手順です。AIとの受け渡しに使うMarkdown機能も説明します。</p>
+      <p>Saga &amp; Seeker のキャラクターシートを開き、内容を確認・編集して、新しいHTMLとして保存するためのガイドです。AIとのやり取りに使えるMarkdown機能についても説明します。</p>
       <span class="version">アプリケーションバージョン 2.1.0</span>
     </div>
   </header>
@@ -170,169 +171,185 @@
     <nav aria-labelledby="toc-heading">
       <h2 id="toc-heading">このガイドの内容</h2>
       <ol>
-        <li><a href="#quick-start">最初の3手順</a></li>
-        <li><a href="#open">HTMLを開く・新規作成</a></li>
+        <li><a href="#quick-start">まずはこの3手順</a></li>
+        <li><a href="#open">シートを開く・新しく作る</a></li>
         <li><a href="#edit">各項目を編集する</a></li>
         <li><a href="#markdown">AI向けMarkdown形式 v2</a></li>
-        <li><a href="#readonly">読み取り専用とエラー</a></li>
-        <li><a href="#save">別名で保存する</a></li>
-        <li><a href="#security">安全上の注意</a></li>
+        <li><a href="#readonly">読み取り専用になったとき</a></li>
+        <li><a href="#save">編集したシートを保存する</a></li>
+        <li><a href="#security">利用前に確認したいこと</a></li>
         <li><a href="#faq">困ったとき</a></li>
       </ol>
     </nav>
 
     <section id="quick-start" aria-labelledby="quick-heading">
-      <h2 id="quick-heading">最初の3手順</h2>
+      <h2 id="quick-heading">まずはこの3手順</h2>
       <div class="steps">
-        <div class="step"><strong>アプリを起動</strong>し、「HTMLファイルを開く」または「新規作成」を選びます。</div>
-        <div class="step"><strong>タブを切り替えて編集</strong>します。画面下の「変更」件数で未保存の変更を確認できます。</div>
-        <div class="step"><strong>「別名で保存」</strong>します。読み込んだ元のHTMLへ自動で上書きしません。</div>
+        <div class="step"><strong>シートを開く</strong> — 「HTMLファイルを開く」から既存のシートを選ぶか、「新規作成」で新しいシートを作ります。</div>
+        <div class="step"><strong>内容を編集する</strong> — 画面上部のタブを切り替えながら、必要な項目を編集します。画面下には未保存の変更件数が表示されます。</div>
+        <div class="step"><strong>別名で保存する</strong> — 編集が終わったら「別名で保存」を選びます。元のHTMLはそのまま残ります。</div>
       </div>
       <figure>
-        <img src="user-guide-assets/01-start-screen.png" width="1440" height="900" alt="起動画面。HTMLを開く、新規作成、Markdownから新規作成のボタンがある">
-        <figcaption>起動画面。実在データを使わない匿名合成画面です。</figcaption>
+        <img src="user-guide-assets/01-start-screen.png" width="1440" height="900" alt="起動画面。HTMLを開く、新規作成、Markdownから新規作成のボタンが並んでいる">
+        <figcaption>起動画面。ここから既存シートの編集、新規作成、Markdownからの作成を始められます。</figcaption>
       </figure>
     </section>
 
     <section id="open" aria-labelledby="open-heading">
-      <h2 id="open-heading">HTMLを開く・新規作成</h2>
+      <h2 id="open-heading">シートを開く・新しく作る</h2>
+
       <h3>既存のキャラクターシートを開く</h3>
       <ol>
         <li>「HTMLファイルを開く」を押します。</li>
         <li>ゲームから出力したキャラクターシートのHTMLを選びます。</li>
-        <li>キャラクター名とスキル欄の概要を確認します。</li>
+        <li>シートが開いたら、キャラクター名と各タブの内容を確認します。</li>
       </ol>
-      <p class="note">ファイル選択ダイアログはWindows環境によって見た目が変わるため、ガイド画像には含めていません。</p>
+      <p class="note">Windowsのファイル選択画面は環境によって見た目が異なります。</p>
       <figure>
-        <img src="user-guide-assets/02-loaded-sheet.png" width="1440" height="900" loading="lazy" alt="匿名サンプルを読み込んだ編集画面">
-        <figcaption>読込済み画面。上部に対象とスキル欄の概要、中央に編集タブ、下部に状態が表示されます。</figcaption>
+        <img src="user-guide-assets/02-loaded-sheet.png" width="1440" height="900" loading="lazy" alt="キャラクターシートを読み込んだ編集画面">
+        <figcaption>シートを開いた状態。上部で対象を確認し、中央のタブから編集する項目を選びます。</figcaption>
       </figure>
-      <h3>新規作成</h3>
-      <p>「新規作成」は空のキャラクターシートを作ります。名前、プロフィール、ステータス、スキル、性格キーワード、思い出を入力してから別名で保存してください。</p>
+
+      <h3>新しいシートを作る</h3>
+      <p>「新規作成」では、空のキャラクターシートから始められます。名前、プロフィール、ステータス、スキル、性格キーワード、思い出などを入力し、完成したら「別名で保存」でHTMLを作成します。</p>
     </section>
 
     <section id="edit" aria-labelledby="edit-heading">
       <h2 id="edit-heading">各項目を編集する</h2>
-      <p class="lead">「基本情報」「ステータス」「スキル」「性格キーワード」「思い出」のタブを切り替えます。</p>
+      <p class="lead">「基本情報」「ステータス」「スキル」「性格キーワード」「思い出」のタブから、編集したい項目を選びます。</p>
 
       <h3>基本情報とプロフィール</h3>
-      <p>キャラクター名は1行で入力します。プロフィール7項目は複数行を使えます。長い項目は見出しを押して展開・折り畳みできます。</p>
+      <p>キャラクター名は1行で入力します。プロフィールの各項目は複数行に対応しており、長い項目は見出しを押して開閉できます。</p>
       <figure>
         <img src="user-guide-assets/03-basic-information.png" width="1440" height="900" loading="lazy" alt="基本情報タブで名前とプロフィールを編集する画面">
-        <figcaption>基本情報。プロフィールの改行は保存後のHTMLにも意味のある改行として反映されます。</figcaption>
+        <figcaption>基本情報タブ。プロフィール内の改行も保存したHTMLへ反映されます。</figcaption>
       </figure>
 
       <h3>キャラクター画像</h3>
-      <p>シートを読み込むと、埋め込まれた画像が基本情報タブへ自動表示されます。表示に失敗した場合は他の項目を引き続き編集でき、「プレビューを再読込」で安全検査を通した再表示を試せます。画像欄が読み取り専用のときも既存画像は表示されますが、差し替えはできません。</p>
+      <p>シートに画像が含まれている場合は、基本情報タブにプレビューが表示されます。表示できなかった場合でも他の項目はそのまま編集できます。「プレビューを再読込」で、もう一度表示を試すこともできます。</p>
+      <p>画像を変更できるシートでは、画像欄から差し替えができます。読み取り専用の場合は、現在の画像を確認することだけができます。</p>
 
-      <h3>プロフィールを比較する</h3>
-      <p>「プロフィール比較を表示」を押すと、2項目と性格キーワードを横に並べられます。別ウィンドウ表示も選べます。</p>
+      <h3>プロフィールを並べて確認する</h3>
+      <p>「プロフィール比較を表示」を使うと、2つのプロフィール項目と性格キーワードを同時に確認できます。別ウィンドウに分けて表示することもできます。</p>
       <figure>
-        <img src="user-guide-assets/04-profile-comparison.png" width="1440" height="900" loading="lazy" alt="2つのプロフィール項目を並べた比較画面">
-        <figcaption>比較は入力を整理する補助表示です。同じ編集内容を別の見方で表示します。</figcaption>
+        <img src="user-guide-assets/04-profile-comparison.png" width="1440" height="900" loading="lazy" alt="2つのプロフィール項目を並べて表示した比較画面">
+        <figcaption>同じシートの内容を並べて見ながら、設定のつながりや重複を確認できます。</figcaption>
       </figure>
 
       <h3>スキル</h3>
-      <p>左の一覧からスキルを1つ選び、右で名前と説明を編集します。スキル名は1行、説明は複数行です。保護中のスキルは確認操作なしに置き換えません。</p>
-      <p class="note">「デフォルトスキルを選択…」では、同梱カタログからゲーム内デフォルトスキルを選べます。選択直後は未確定なので名前と説明を編集できます。そのまま保存した場合だけ正規デフォルトとして内部ID・種別・キーを確定し、名前または説明を変更して保存した場合はオリジナルスキルとして保存します。</p>
+      <p>左側の一覧からスキルを選ぶと、右側で名前と説明を編集できます。既存のデフォルトスキルを別の種類へ変更するときは、画面の案内に沿って確認操作を行います。</p>
+      <p class="note">「デフォルトスキルを選択…」では、同梱されているゲーム内デフォルトスキルから選べます。選んだ直後は名前や説明を調整できます。内容を変更せず保存した場合はデフォルトスキルとして、名前や説明を編集して保存した場合はオリジナルスキルとして扱われます。</p>
       <figure>
         <img src="user-guide-assets/05-skills.png" width="1440" height="900" loading="lazy" alt="スキル一覧と選択したスキルの編集欄">
-        <figcaption>スキル一覧には、種類、保護状態、変更の有無が表示されます。</figcaption>
+        <figcaption>スキル一覧では、現在の種類と変更状況を確認できます。</figcaption>
       </figure>
 
       <h3>性格キーワード</h3>
-      <p>設定枠を選び、名前の部分一致または分類からキーワードを探します。カタログにない文字列を自由入力する機能ではありません。</p>
+      <p>設定したい枠を選び、キーワード名や分類から候補を探します。候補から選ぶ方式なので、公式カタログにない名前を直接入力することはできません。</p>
       <figure>
         <img src="user-guide-assets/06-personality-keywords.png" width="1440" height="900" loading="lazy" alt="性格キーワードの設定枠と検索結果">
-        <figcaption>同じキーワードの重複や不正な並びを避けながら設定します。</figcaption>
+        <figcaption>名前や分類で候補を絞り込み、各枠へ設定します。</figcaption>
       </figure>
 
       <h3>思い出</h3>
-      <p>思い出の追加、順序変更、空白保持枠への置換を行えます。文章項目は複数行を使えます。</p>
+      <p>思い出は追加、並べ替え、空き枠への変更ができます。文章部分は複数行で入力できます。</p>
       <figure>
         <img src="user-guide-assets/07-memories.png" width="1440" height="900" loading="lazy" alt="思い出の一覧と文章項目の編集画面">
-        <figcaption>Markdownからの新規作成とは制限が異なります。HTMLを直接編集するときは思い出を編集できます。</figcaption>
+        <figcaption>HTMLを直接開いて編集している場合は、思い出も編集できます。</figcaption>
       </figure>
     </section>
 
     <section id="markdown" aria-labelledby="markdown-heading">
       <h2 id="markdown-heading">AI向けMarkdown形式 v2</h2>
-      <p>AIへ内容を渡す中間形式の番号は「AI向けMarkdown形式 v2」です。アプリケーションバージョン 2.1.0とは別の番号です。</p>
+      <p>AI向けMarkdown形式 v2は、キャラクターシートの内容をAIへ渡したり、AIで編集した内容から新しいシートを作ったりするための中間形式です。アプリケーションバージョン 2.1.0とは別に管理されています。</p>
+
       <div class="grid">
         <div class="card">
           <h3>Markdownを書き出す</h3>
-          <p>開いているシートの基本項目、ステータス、性格キーワード、スキル、AI参照用の思い出を書き出します。画像と内部IDは含みません。</p>
+          <p>開いているシートから、プロフィール、ステータス、性格キーワード、スキル、AI参照用の思い出をMarkdownへ書き出します。画像や内部管理用の情報は含まれません。</p>
         </div>
         <div class="card">
           <h3>Markdownから新規作成</h3>
-          <p>形式を検査し、詳細プレビューで内容を確認した後、新しいシートを作ります。現在開いているHTMLを直接書き換えません。</p>
+          <p>Markdownの内容を確認したうえで、新しいキャラクターシートを作成します。すでに開いているHTMLを直接変更する機能ではありません。</p>
         </div>
       </div>
+
       <figure>
-        <img src="user-guide-assets/08-markdown-import-preview.png" width="1440" height="900" loading="lazy" alt="AI向けMarkdown形式 v2の取込プレビュー。思い出は検出するが復元しないと表示される">
-        <figcaption>スクロール可能な取込プレビューで、値と警告の全文、復元されない全項目を確認します。文字は選択してコピーできます。</figcaption>
+        <img src="user-guide-assets/08-markdown-import-preview.png" width="1440" height="900" loading="lazy" alt="AI向けMarkdown形式 v2を読み込んだ確認画面">
+        <figcaption>作成前に、読み込まれる内容と引き継がれない項目を確認できます。</figcaption>
       </figure>
-      <p class="limit"><strong>重要:</strong> 思い出は件数と構造を検出しますが、Markdownから新規作成したシートへは復元されません。画像と内部IDも復元されず、スキルは新しいオリジナルスキルになります。</p>
-      <h3>旧形式Markdown</h3>
-      <p>マーカーなしを含む旧形式を検出した場合、内容を先に解析しません。「旧形式として解析する」を明示した後にだけ詳細プレビューへ進みます。欠落項目は警告になり、解釈が一意でない構造や未知のH2/H3見出しはエラーになります。</p>
+
+      <p class="limit"><strong>引き継がれない項目:</strong> 思い出は内容を確認できますが、Markdownから新規作成したシートへは復元されません。画像も引き継がれません。また、Markdown上のスキルは新しいオリジナルスキルとして作成されます。</p>
+
+      <h3>以前のMarkdown形式を使う場合</h3>
+      <p>以前の形式を読み込んだ場合は、まず旧形式として扱うか確認します。「旧形式として解析する」を選ぶと内容の確認画面へ進みます。必要な項目が足りない場合は警告が表示され、形式を一意に解釈できない場合は読み込みを中止します。</p>
     </section>
 
     <section id="readonly" aria-labelledby="readonly-heading">
-      <h2 id="readonly-heading">読み取り専用とエラー</h2>
-      <p>HTML内の表示とデータが安全に対応付けられないときは、推測して保存せず、内容を読み取り専用で表示します。</p>
+      <h2 id="readonly-heading">読み取り専用になったとき</h2>
+      <p>シートの形式をこのバージョンのエディターで正しく編集できない場合は、内容を表示したまま読み取り専用になります。現在の内容を確認しながら、画面に表示される理由と対処方法を確認してください。</p>
+
       <figure>
-        <img src="user-guide-assets/09-read-only.png" width="1440" height="900" loading="lazy" alt="読み取り専用バッジと理由が表示された画面">
-        <figcaption>未知の形式番号を実際に読み込んだ状態です。読み取り専用は内容を失った状態ではなく、安全な更新を停止した状態です。</figcaption>
+        <img src="user-guide-assets/09-read-only.png" width="1440" height="900" loading="lazy" alt="読み取り専用の表示と理由が示された画面">
+        <figcaption>読み取り専用では内容の確認はできますが、保存を伴う編集は行いません。</figcaption>
       </figure>
+
       <ul>
-        <li>元のゲームからHTMLをもう一度出力して試します。</li>
-        <li>エラー画面の「原因」「影響」「対処」を確認します。</li>
-        <li>元ファイルを手作業で直す前に、別の場所へコピーを残します。</li>
+        <li>元のゲームからHTMLをもう一度出力し、開き直してみます。</li>
+        <li>画面に表示されている理由と対処方法を確認します。</li>
+        <li>元ファイルへ手作業で変更を加える場合は、先にコピーを残しておくと安心です。</li>
       </ul>
     </section>
 
     <section id="save" aria-labelledby="save-heading">
-      <h2 id="save-heading">別名で保存する</h2>
+      <h2 id="save-heading">編集したシートを保存する</h2>
       <ol>
-        <li>画面下のエラーがなく、変更件数が意図どおりか確認します。</li>
+        <li>画面下の状態表示を見て、意図した変更になっているか確認します。</li>
         <li>「別名で保存」を押します。</li>
-        <li>元HTMLとは別のファイル名を選びます。</li>
-        <li>保存完了表示を確認します。</li>
+        <li>保存先とファイル名を選びます。</li>
+        <li>保存完了の表示を確認します。</li>
       </ol>
+
       <figure>
-        <img src="user-guide-assets/10-save-complete.png" width="1440" height="900" loading="lazy" alt="別名での保存が完了した状態">
-        <figcaption>「別名で保存」を実行した直後です。保存後は新しいファイルが比較の基準になります。</figcaption>
+        <img src="user-guide-assets/10-save-complete.png" width="1440" height="900" loading="lazy" alt="別名での保存が完了した画面">
+        <figcaption>保存後は、新しく作成したHTMLが現在の編集対象になります。</figcaption>
       </figure>
-      <p class="warning">大切なシートは、ゲームで読み込めることを確認するまで元HTMLを残してください。</p>
+
+      <p class="warning">編集後のシートをゲームで確認するまでは、元のHTMLも残しておくことをおすすめします。</p>
     </section>
 
     <section id="security" aria-labelledby="security-heading">
-      <h2 id="security-heading">安全上の注意</h2>
+      <h2 id="security-heading">利用前に確認したいこと</h2>
+
       <h3>Windows SmartScreenが表示された場合</h3>
-      <p>配布元とファイル名が案内どおりか確認してください。不明な入手元の実行ファイルは開かないでください。このガイドは個人端末のSmartScreen実画面を掲載せず、文章で説明しています。</p>
+      <p>実行ファイルの配布元とファイル名を確認し、自分が入手した配布物であることを確かめてから起動してください。入手経路に心当たりがない場合は、そのファイルを使用しないでください。</p>
+
       <div class="note" role="note">
-        <strong>確認の流れ:</strong>
-        配布元を確認 → ウイルス対策ソフトで検査 → 信頼できる配布物だけを起動。
-        判断できない場合は中止してください。
+        配布元を確認し、必要に応じてウイルス対策ソフトでも検査してから起動します。
       </div>
-      <h3>AIへ渡す前に</h3>
-      <p>Markdownにはプロフィールや思い出の文章が含まれます。個人情報や共有したくない設定がないか、テキストエディターで確認してください。</p>
+
+      <h3>MarkdownをAIへ渡す前に</h3>
+      <p>書き出したMarkdownには、キャラクターのプロフィールや思い出などが含まれます。外部のAIサービスへ送る場合は、共有したくない内容が含まれていないか先に確認してください。</p>
     </section>
 
     <section id="faq" aria-labelledby="faq-heading">
       <h2 id="faq-heading">困ったとき</h2>
+
       <details>
         <summary>保存ボタンを押せません</summary>
-        <p>読み取り専用、入力エラー、スキル置換の未確認がないか、画面下の状態表示を確認してください。</p>
+        <p>画面下の状態表示を確認してください。読み取り専用になっている場合、入力内容にエラーがある場合、スキル変更の確認が完了していない場合などは保存できません。</p>
       </details>
+
       <details>
         <summary>プロフィールの改行が消えました</summary>
-        <p>アプリケーションバージョン 2.1.0では、プロフィールHTMLの <code>&lt;br&gt;</code> を意味のある改行として扱います。古い実行ファイルを起動していないか確認してください。</p>
+        <p>アプリケーションバージョン 2.1.0では、プロフィールHTMLの <code>&lt;br&gt;</code> を改行として扱います。古い実行ファイルを使っていないか確認してください。</p>
       </details>
+
       <details>
         <summary>Markdownで編集した思い出が戻りません</summary>
-        <p>仕様です。AI向けMarkdown形式 v2の思い出はAI参照用で、Markdownから新規作成しても復元されません。</p>
+        <p>AI向けMarkdown形式 v2では、思い出はAIが内容を参照するために書き出されますが、Markdownから新規作成したシートへは復元されません。</p>
       </details>
+
       <details>
         <summary>画面が見づらいです</summary>
         <p>メニューの「表示」→「外観」から、ライト、ダーク、ハイコントラストを選べます。</p>
@@ -340,15 +357,16 @@
     </section>
 
     <section id="gallery" aria-labelledby="gallery-heading">
-      <h2 id="gallery-heading">補助画面ギャラリー</h2>
-      <p>次の10状態も正式画像として再生成・監査しています。通常の手順では必要な場面だけ参照してください。</p>
+      <h2 id="gallery-heading">そのほかの画面例</h2>
+      <p>各機能を使ったときの画面例です。必要な項目だけ参照してください。</p>
+
       <div class="gallery">
-        <figure><img src="user-guide-assets/11-multiple-profiles.png" width="1440" height="900" loading="lazy" alt="複数のプロフィール編集欄を展開した画面"><figcaption>複数プロフィール展開</figcaption></figure>
-        <figure><img src="user-guide-assets/12-comparison-window.png" width="1440" height="900" loading="lazy" alt="プロフィール比較を別ウィンドウで開いた画面"><figcaption>比較別ウィンドウ</figcaption></figure>
-        <figure><img src="user-guide-assets/13-vacant-skill.png" width="1440" height="900" loading="lazy" alt="未使用のスキル枠へ追加する画面"><figcaption>未使用枠追加</figcaption></figure>
-        <figure><img src="user-guide-assets/14-image-change.png" width="1440" height="900" loading="lazy" alt="キャラクター画像のプレビューと差し替えボタン"><figcaption>画像変更</figcaption></figure>
-        <figure><img src="user-guide-assets/15-markdown-export.png" width="1440" height="900" loading="lazy" alt="AI向けMarkdown形式 v2を書き出した直後の編集画面"><figcaption>実際のMarkdown書出し後も、HTMLの未保存変更は保持されます。</figcaption></figure>
-        <figure><img src="user-guide-assets/16-input-error.png" width="1440" height="900" loading="lazy" alt="単一行項目に改行がある入力エラー画面"><figcaption>入力エラー</figcaption></figure>
+        <figure><img src="user-guide-assets/11-multiple-profiles.png" width="1440" height="900" loading="lazy" alt="複数のプロフィール編集欄を展開した画面"><figcaption>複数のプロフィールを同時に開いた状態</figcaption></figure>
+        <figure><img src="user-guide-assets/12-comparison-window.png" width="1440" height="900" loading="lazy" alt="プロフィール比較を別ウィンドウで開いた画面"><figcaption>プロフィール比較を別ウィンドウで表示</figcaption></figure>
+        <figure><img src="user-guide-assets/13-vacant-skill.png" width="1440" height="900" loading="lazy" alt="未使用のスキル枠へスキルを追加する画面"><figcaption>空いているスキル枠へ追加</figcaption></figure>
+        <figure><img src="user-guide-assets/14-image-change.png" width="1440" height="900" loading="lazy" alt="キャラクター画像のプレビューと差し替えボタン"><figcaption>キャラクター画像の変更</figcaption></figure>
+        <figure><img src="user-guide-assets/15-markdown-export.png" width="1440" height="900" loading="lazy" alt="AI向けMarkdown形式 v2を書き出した後の編集画面"><figcaption>Markdownを書き出した後も、編集中の内容はそのまま残ります。</figcaption></figure>
+        <figure><img src="user-guide-assets/16-input-error.png" width="1440" height="900" loading="lazy" alt="入力内容にエラーがある画面"><figcaption>入力内容に修正が必要な状態</figcaption></figure>
         <figure><img src="user-guide-assets/17-light-theme.png" width="1440" height="900" loading="lazy" alt="ライトテーマの編集画面"><figcaption>ライト</figcaption></figure>
         <figure><img src="user-guide-assets/18-dark-theme.png" width="1440" height="900" loading="lazy" alt="ダークテーマの編集画面"><figcaption>ダーク</figcaption></figure>
         <figure><img src="user-guide-assets/19-high-contrast-theme.png" width="1440" height="900" loading="lazy" alt="ハイコントラストテーマの編集画面"><figcaption>ハイコントラスト</figcaption></figure>

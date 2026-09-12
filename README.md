@@ -5,8 +5,8 @@ Saga & SeekerのキャラクターシートHTMLを新規作成し、基本情報
 ## ダウンロードと起動
 
 1. [最新版のダウンロードページ](https://github.com/shirogitsune-lab/saga-seeker-skill-editor/releases/latest)を開きます。
-2. 通常は、ファイル名の末尾が`windows-x64-onefile.exe`になっているものをダウンロードします。
-3. ダウンロードしたEXEを起動します。インストール作業は不要です。
+2. 通常は、ファイル名の末尾が`windows-x64-onedir.zip`になっているものをダウンロードします。
+3. ZIPを展開し、`SagaSeekerSkillEditor`フォルダ内の`SagaSeekerSkillEditor.exe`を起動します。インストール作業は不要です。
 4. 「既存シートを開く」「新規作成」「Markdownから新規作成」のいずれかを選び、5つの編集タブを使用します。
 5. 編集後は「別名で保存」を使い、原本とは別のHTMLファイルとして保存します。
 
@@ -14,8 +14,8 @@ Saga & SeekerのキャラクターシートHTMLを新規作成し、基本情報
 
 配布形式は次の2種類です。
 
-- `onefile`: エディター単体のEXE。通常はこちらを使用します。利用ガイドはReleaseの`SagaSeekerSkillEditor-v2.1.0-guide.html`を別途ダウンロードできます。
-- `onedir`: EXE、実行に必要なファイル、自己完結型の`使い方.html`をまとめたZIP。
+- `onedir`: **推奨形式です。** EXE、実行に必要なファイル、自己完結型の`使い方.html`をまとめたZIPです。ZIPを展開し、フォルダごと使用してください。
+- `onefile`: エディター単体のEXEです。1ファイルだけで使用したい場合に選べます。利用ガイドはReleaseの`SagaSeekerSkillEditor-v2.1.0-guide.html`を別途ダウンロードできます。
 
 このアプリケーションはローカルファイルだけを処理し、ネットワーク通信を行いません。
 

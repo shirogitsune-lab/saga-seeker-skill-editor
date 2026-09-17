@@ -32,7 +32,9 @@ DEFAULT_THEME = ThemeId.LIGHT
 @dataclass(frozen=True)
 class ThemeTokens:
     background: str
+    canvas: str
     panel: str
+    surface: str
     input: str
     border: str
     text: str
@@ -69,8 +71,10 @@ class ThemeTokens:
 
 THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
     ThemeId.LIGHT: ThemeTokens(
-        background="#e7ebef",
-        panel="#f7f9fa",
+        background="#eaf1f8",
+        canvas="qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #e8f4f8, stop:1 #f1edfa)",
+        panel="#f6faff",
+        surface="#ffffff",
         input="#ffffff",
         border="#6f7d88",
         text="#17212b",
@@ -102,10 +106,12 @@ THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
         selection_border_width="0px",
     ),
     ThemeId.DARK: ThemeTokens(
-        background="#11161a",
-        panel="#20282e",
+        background="#111725",
+        canvas="qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #102333, stop:1 #1c1830)",
+        panel="#1b2634",
+        surface="#233142",
         input="#080e12",
-        border="#647681",
+        border="#8b9cab",
         text="#edf2f5",
         muted_text="#b7c1c9",
         accent="#2697b1",
@@ -136,7 +142,9 @@ THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
     ),
     ThemeId.HIGH_CONTRAST: ThemeTokens(
         background="#030303",
+        canvas="#030303",
         panel="#0c0c0c",
+        surface="#000000",
         input="#000000",
         border="#f5f5f5",
         text="#ffffff",

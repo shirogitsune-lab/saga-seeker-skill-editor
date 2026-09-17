@@ -287,6 +287,20 @@ def test_theme_contrast_targets(theme: ThemeId) -> None:
     assert all(_contrast(foreground, background) >= 3.0 for foreground, background in ui_pairs)
 
 
+@pytest.mark.parametrize("theme", list(ThemeId))
+def test_basic_cards_and_profile_editors_are_legible_in_each_theme(
+    tmp_path: Path, theme: ThemeId
+) -> None:
+    manager = _manager(tmp_path)
+    qss = manager._load_qss(theme)
+    tokens = THEME_TOKENS[theme]
+
+    assert "QFrame#basicIdentityCard, QFrame#basicProfileCard, QFrame#basicImageCard" in qss
+    assert "QPlainTextEdit:focus" in qss
+    assert _contrast(tokens.text, tokens.surface) >= 4.5
+    assert _contrast(tokens.border, tokens.surface) >= 3.0
+
+
 def test_packaging_configuration_includes_theme_resources() -> None:
     root = Path(__file__).resolve().parents[1]
     spec = (root / "SagaSeekerSkillEditor.spec").read_text(encoding="utf-8")

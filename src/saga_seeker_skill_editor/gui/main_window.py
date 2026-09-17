@@ -296,12 +296,13 @@ class MainWindow(QMainWindow):
         self._create_menu()
 
         root_layout = QVBoxLayout()
-        root_layout.setContentsMargins(10, 10, 10, 10)
-        root_layout.setSpacing(8)
+        root_layout.setContentsMargins(16, 14, 16, 12)
+        root_layout.setSpacing(12)
         root_layout.addWidget(self.summary_panel)
         root_layout.addWidget(self.content_stack, 1)
         root_layout.addWidget(self.status_bar)
         root = QWidget()
+        root.setObjectName("appRoot")
         root.setLayout(root_layout)
         self.setCentralWidget(root)
         self.setAcceptDrops(True)
@@ -601,6 +602,7 @@ class MainWindow(QMainWindow):
         self.reset_button = QPushButton("変更を破棄")
         self.reset_button.clicked.connect(self.reset_edits)
         self.save_button = QPushButton("別名で保存")
+        self.save_button.setProperty("role", "primary")
         self.save_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton))
         self.save_button.clicked.connect(self.save_action.trigger)
 

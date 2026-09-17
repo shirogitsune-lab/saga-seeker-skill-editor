@@ -90,7 +90,15 @@ from saga_seeker_skill_editor.gui.personality_editor_widget import PersonalityEd
 from saga_seeker_skill_editor.gui.skill_editor_widget import SkillEditorWidget
 from saga_seeker_skill_editor.gui.skill_list_widget import SkillListWidget
 from saga_seeker_skill_editor.gui.status_editor_widget import StatusEditorWidget
-from saga_seeker_skill_editor.gui.theme_manager import DEFAULT_THEME, ThemeId, ThemeManager, refresh_widget_style
+from saga_seeker_skill_editor.gui.theme_manager import (
+    DEFAULT_THEME,
+    BasicBackgroundMode,
+    ThemeId,
+    ThemeManager,
+    refresh_widget_style,
+    restore_basic_background,
+    save_basic_background,
+)
 from saga_seeker_skill_editor.gui.vacant_slot_editor_widget import VacantSlotEditorWidget
 from saga_seeker_skill_editor.gui.window_preferences import (
     StartupDisplayMode,
@@ -264,6 +272,7 @@ class MainWindow(QMainWindow):
             theme_manager.apply_theme(DEFAULT_THEME, persist=False)
         self.theme_manager = theme_manager
         self.startup_display_mode = restore_startup_display(theme_manager.settings)
+        self.basic_background_mode = restore_basic_background(theme_manager.settings)
         self.setWindowTitle("Saga & Seeker キャラクターシートエディター")
         self.resize(1100, 760)
         self.setMinimumSize(860, 600)
@@ -539,6 +548,10 @@ class MainWindow(QMainWindow):
         personality_scroll.setWidget(self.personality_editor)
 
         self.character_details_editor = CharacterDetailsWidget()
+        self.character_details_editor.set_appearance(
+            self.theme_manager.current_theme,
+            self.basic_background_mode,
+        )
         self.character_details_editor.changed.connect(self._recalculate_changes)
         self.character_details_editor.replace_icon_requested.connect(
             self._replace_icon
@@ -559,6 +572,7 @@ class MainWindow(QMainWindow):
         self.memory_editor.changed.connect(self._recalculate_changes)
 
         self.edit_tabs = QTabWidget()
+        self.edit_tabs.setProperty("basicActive", True)
         self.basic_tab_index = self.edit_tabs.addTab(details_scroll, "基本情報")
         self.status_tab_index = self.edit_tabs.addTab(status_scroll, "ステータス")
         self.skill_tab_index = self.edit_tabs.addTab(skill_page, "スキル")
@@ -570,6 +584,8 @@ class MainWindow(QMainWindow):
             self.memory_editor,
             "思い出",
         )
+        self.edit_tabs.currentChanged.connect(self._sync_basic_pane_style)
+        self._sync_basic_pane_style(self.basic_tab_index)
 
         self.loaded_page = QWidget()
         loaded_layout = QVBoxLayout(self.loaded_page)
@@ -659,6 +675,25 @@ class MainWindow(QMainWindow):
         self.appearance_action_group.triggered.connect(self._apply_selected_theme)
         self._sync_theme_actions()
 
+        background_menu = view_menu.addMenu("基本情報の背景")
+        self.basic_background_action_group = QActionGroup(self)
+        self.basic_background_action_group.setExclusive(True)
+        self.basic_background_actions: dict[BasicBackgroundMode, QAction] = {}
+        for mode, label in (
+            (BasicBackgroundMode.NONE, "背景なし"),
+            (BasicBackgroundMode.IMAGE, "背景あり"),
+        ):
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setData(mode.value)
+            action.setChecked(mode is self.basic_background_mode)
+            self.basic_background_action_group.addAction(action)
+            background_menu.addAction(action)
+            self.basic_background_actions[mode] = action
+        self.basic_background_action_group.triggered.connect(
+            self._save_basic_background
+        )
+
         startup_display_menu = view_menu.addMenu("起動時の表示(&S)")
         self.startup_display_action_group = QActionGroup(self)
         self.startup_display_action_group.setExclusive(True)
@@ -686,6 +721,22 @@ class MainWindow(QMainWindow):
         theme = ThemeId(str(action.data()))
         result = self.theme_manager.apply_theme(theme)
         self._sync_theme_actions(result.applied)
+        self.character_details_editor.set_appearance(
+            result.applied,
+            self.basic_background_mode,
+        )
+
+    def _sync_basic_pane_style(self, index: int) -> None:
+        self.edit_tabs.setProperty("basicActive", index == self.basic_tab_index)
+        refresh_widget_style(self.edit_tabs)
+
+    def _save_basic_background(self, action: QAction) -> None:
+        self.basic_background_mode = BasicBackgroundMode(str(action.data()))
+        save_basic_background(self.theme_manager.settings, self.basic_background_mode)
+        self.character_details_editor.set_appearance(
+            self.theme_manager.current_theme,
+            self.basic_background_mode,
+        )
 
     def _sync_theme_actions(self, theme: ThemeId | None = None) -> None:
         selected = theme or self.theme_manager.current_theme

@@ -20,6 +20,15 @@ QFrame#basicIdentityCard, QFrame#basicProfileCard, QFrame#basicImageCard {
     border: @BORDER_WIDTH@ solid @BORDER@;
     border-radius: 12px;
 }
+QFrame#basicGlassLayer {
+    background: @PANEL@;
+    border: 1px solid @PANE_BORDER@;
+    border-radius: 16px;
+}
+QFrame#basicGlassLayer[backgroundEnabled="true"] {
+    background: @GLASS@;
+    border: 1px solid @GLASS_BORDER@;
+}
 QFrame#editorPanel[dragActive="true"] {
     border: @FOCUS_WIDTH@ solid @FOCUS@;
 }
@@ -235,6 +244,9 @@ QSplitter::handle {
     background: @SPLITTER@;
     width: 2px;
 }
+QSplitter#basicContentSplitter::handle {
+    background: transparent;
+}
 QMenuBar::item:selected, QMenu::item:selected {
     background: @SELECTION@;
     color: @SELECTION_TEXT@;
@@ -251,6 +263,9 @@ QTabWidget::pane {
     border: @BORDER_WIDTH@ solid @BORDER@;
     border-radius: 10px;
     background: @BACKGROUND@;
+}
+QTabWidget[basicActive="true"]::pane {
+    border: @BORDER_WIDTH@ solid @PANE_BORDER@;
 }
 QTabBar::tab {
     background: @BUTTON@;

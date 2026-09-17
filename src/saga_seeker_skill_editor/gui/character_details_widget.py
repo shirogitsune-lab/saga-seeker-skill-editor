@@ -5,8 +5,8 @@ from __future__ import annotations
 import base64
 import binascii
 
-from PySide6.QtCore import QSignalBlocker, Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QSignalBlocker, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -30,6 +30,13 @@ from saga_seeker_skill_editor.gui.image_pipeline import (
     ImageSafetyError,
     inspect_image_bytes,
 )
+from saga_seeker_skill_editor.gui.theme_manager import (
+    BasicBackgroundMode,
+    THEME_TOKENS,
+    ThemeId,
+    refresh_widget_style,
+)
+from saga_seeker_skill_editor.resources import resource_path
 
 
 PROFILE_LABELS = {
@@ -55,6 +62,11 @@ class CharacterDetailsWidget(QWidget):
         self._baseline_profiles: dict[str, str] = {}
         self._untouched_profile_keys: set[str] = set()
         self._comparison_loading = False
+        self._background_mode = BasicBackgroundMode.NONE
+        self._theme = ThemeId.LIGHT
+        self._background_pixmap: QPixmap | None = None
+        self._scaled_background: QPixmap | None = None
+        self._scaled_background_size = QSize()
         self.comparison_window: QDialog | None = None
 
         self.name_edit = QLineEdit()
@@ -209,6 +221,7 @@ class CharacterDetailsWidget(QWidget):
         icon_host_layout.addStretch(1)
 
         self.content_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.content_splitter.setObjectName("basicContentSplitter")
         self.content_splitter.setChildrenCollapsible(False)
         self.content_splitter.setHandleWidth(12)
         self.content_splitter.addWidget(details_widget)
@@ -219,15 +232,70 @@ class CharacterDetailsWidget(QWidget):
         self.content_splitter.setStretchFactor(1, 1)
         self.content_splitter.setSizes([900, 300])
 
+        self.glass_layer = QFrame()
+        self.glass_layer.setObjectName("basicGlassLayer")
+        self.glass_layer.setProperty("backgroundEnabled", False)
+        glass_layout = QVBoxLayout(self.glass_layer)
+        glass_layout.setContentsMargins(10, 10, 10, 10)
+        glass_layout.addWidget(self.content_splitter)
+
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(12, 12, 12, 12)
-        root_layout.addWidget(self.content_splitter)
+        root_layout.addWidget(self.glass_layer)
 
         self.name_edit.textEdited.connect(self._name_edited)
         for key, edit in self.profile_edits.items():
             edit.textChanged.connect(
                 lambda key=key: self._profile_edited(key)
             )
+
+    def set_appearance(self, theme: ThemeId, background: BasicBackgroundMode) -> None:
+        self._theme = theme
+        self._background_mode = background
+        requested = (
+            background is BasicBackgroundMode.IMAGE
+            and theme is not ThemeId.HIGH_CONTRAST
+        )
+        if requested and self._background_pixmap is None:
+            self._background_pixmap = QPixmap(
+                str(resource_path("assets/basic-background-blurred.png"))
+            )
+        enabled = (
+            requested
+            and self._background_pixmap is not None
+            and not self._background_pixmap.isNull()
+        )
+        self.glass_layer.setProperty("backgroundEnabled", enabled)
+        refresh_widget_style(self.glass_layer)
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        super().paintEvent(event)
+        painter = QPainter(self)
+        if (
+            self._background_mode is BasicBackgroundMode.IMAGE
+            and self._theme is not ThemeId.HIGH_CONTRAST
+            and self._background_pixmap is not None
+            and not self._background_pixmap.isNull()
+        ):
+            if self._scaled_background_size != self.size():
+                self._scaled_background = self._background_pixmap.scaled(
+                    self.size(),
+                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                self._scaled_background_size = self.size()
+            scaled = self._scaled_background
+            assert scaled is not None
+            left = (scaled.width() - self.width()) // 2
+            top = (scaled.height() - self.height()) // 2
+            source = scaled.rect().adjusted(left, top, -left, -top)
+            painter.drawPixmap(self.rect(), scaled, source)
+            overlay = QColor("#f1f8ff" if self._theme is ThemeId.LIGHT else "#0c1430")
+            overlay.setAlpha(168 if self._theme is ThemeId.LIGHT else 174)
+            painter.fillRect(self.rect(), overlay)
+        else:
+            painter.fillRect(self.rect(), QColor(THEME_TOKENS[self._theme].background))
 
     def _set_profile_expanded(self, key: str, expanded: bool) -> None:
         body = self.profile_bodies.get(key)

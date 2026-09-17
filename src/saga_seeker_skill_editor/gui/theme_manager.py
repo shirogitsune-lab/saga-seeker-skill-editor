@@ -18,12 +18,33 @@ from saga_seeker_skill_editor.resources import package_resource_path
 ORGANIZATION_NAME = "shirogitsune-lab"
 APPLICATION_NAME = "SagaSeekerSkillEditor"
 SETTINGS_KEY = "appearance/theme"
+BACKGROUND_SETTINGS_KEY = "appearance/basic_background"
 
 
 class ThemeId(str, Enum):
     LIGHT = "light"
     DARK = "dark"
     HIGH_CONTRAST = "high_contrast"
+
+
+class BasicBackgroundMode(str, Enum):
+    NONE = "none"
+    IMAGE = "image"
+
+
+def restore_basic_background(settings: QSettings) -> BasicBackgroundMode:
+    stored = settings.value(BACKGROUND_SETTINGS_KEY, BasicBackgroundMode.NONE.value)
+    try:
+        return BasicBackgroundMode(str(stored))
+    except ValueError:
+        settings.setValue(BACKGROUND_SETTINGS_KEY, BasicBackgroundMode.NONE.value)
+        settings.sync()
+        return BasicBackgroundMode.NONE
+
+
+def save_basic_background(settings: QSettings, mode: BasicBackgroundMode) -> None:
+    settings.setValue(BACKGROUND_SETTINGS_KEY, mode.value)
+    settings.sync()
 
 
 DEFAULT_THEME = ThemeId.LIGHT
@@ -61,6 +82,9 @@ class ThemeTokens:
     danger_background: str
     danger_text: str
     splitter: str
+    glass: str
+    glass_border: str
+    pane_border: str
     border_width: str
     focus_width: str
     selection_border_width: str
@@ -101,6 +125,9 @@ THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
         danger_background="#f6dde1",
         danger_text="#7f1527",
         splitter="#7b8994",
+        glass="rgba(248, 252, 255, 145)",
+        glass_border="rgba(255, 255, 255, 190)",
+        pane_border="#cad8e3",
         border_width="1px",
         focus_width="2px",
         selection_border_width="0px",
@@ -136,6 +163,9 @@ THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
         danger_background="#5a2d35",
         danger_text="#ffe2e6",
         splitter="#4b5963",
+        glass="rgba(17, 28, 49, 155)",
+        glass_border="rgba(163, 190, 216, 80)",
+        pane_border="#46576a",
         border_width="1px",
         focus_width="2px",
         selection_border_width="0px",
@@ -171,6 +201,9 @@ THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
         danger_background="#300009",
         danger_text="#ffffff",
         splitter="#ffffff",
+        glass="#0c0c0c",
+        glass_border="#f5f5f5",
+        pane_border="#f5f5f5",
         border_width="2px",
         focus_width="3px",
         selection_border_width="2px",

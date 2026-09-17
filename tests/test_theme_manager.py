@@ -17,6 +17,8 @@ from saga_seeker_skill_editor.gui.main_window import MainState, MainWindow  # no
 from saga_seeker_skill_editor.main import build_parser  # noqa: E402
 from saga_seeker_skill_editor.gui.theme_manager import (  # noqa: E402
     APPLICATION_NAME,
+    BACKGROUND_SETTINGS_KEY,
+    BasicBackgroundMode,
     DEFAULT_THEME,
     ORGANIZATION_NAME,
     REQUIRED_TOKENS,
@@ -110,6 +112,48 @@ def test_three_exclusive_actions_exist_and_theme_change_is_saved(tmp_path: Path)
     assert manager.settings.value(SETTINGS_KEY) == ThemeId.DARK.value
     assert window.appearance_actions[ThemeId.DARK].isChecked()
     assert sum(action.isChecked() for action in window.appearance_actions.values()) == 1
+
+
+def test_basic_background_setting_and_high_contrast_suppression(tmp_path: Path) -> None:
+    manager = _manager(tmp_path)
+    manager.restore_theme()
+    window = MainWindow(theme_manager=manager)
+    actions = window.basic_background_actions
+
+    assert window.basic_background_action_group.isExclusive()
+    assert set(actions) == {BasicBackgroundMode.NONE, BasicBackgroundMode.IMAGE}
+    assert actions[BasicBackgroundMode.NONE].isChecked()
+    assert not manager.settings.contains(BACKGROUND_SETTINGS_KEY)
+    assert window.edit_tabs.property("basicActive") is True
+    window.edit_tabs.setCurrentIndex(window.status_tab_index)
+    assert window.edit_tabs.property("basicActive") is False
+    window.edit_tabs.setCurrentIndex(window.basic_tab_index)
+    assert window.edit_tabs.property("basicActive") is True
+
+    actions[BasicBackgroundMode.IMAGE].trigger()
+    assert manager.settings.value(BACKGROUND_SETTINGS_KEY) == "image"
+    assert window.character_details_editor.glass_layer.property("backgroundEnabled") is True
+    assert window.character_details_editor._background_pixmap is not None
+    assert not window.character_details_editor._background_pixmap.isNull()
+
+    window.appearance_actions[ThemeId.HIGH_CONTRAST].trigger()
+    assert actions[BasicBackgroundMode.IMAGE].isChecked()
+    assert window.character_details_editor.glass_layer.property("backgroundEnabled") is False
+
+    window.appearance_actions[ThemeId.DARK].trigger()
+    assert window.character_details_editor.glass_layer.property("backgroundEnabled") is True
+
+    restored = MainWindow(theme_manager=_manager(tmp_path))
+    assert restored.basic_background_mode is BasicBackgroundMode.IMAGE
+    assert restored.basic_background_actions[BasicBackgroundMode.IMAGE].isChecked()
+
+
+def test_invalid_basic_background_setting_restores_plain_background(tmp_path: Path) -> None:
+    manager = _manager(tmp_path)
+    manager.settings.setValue(BACKGROUND_SETTINGS_KEY, "invalid")
+    window = MainWindow(theme_manager=manager)
+    assert window.basic_background_mode is BasicBackgroundMode.NONE
+    assert manager.settings.value(BACKGROUND_SETTINGS_KEY) == "none"
 
 
 def test_saved_theme_is_restored_by_next_manager(tmp_path: Path) -> None:

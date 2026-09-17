@@ -5,8 +5,8 @@ from __future__ import annotations
 import base64
 import binascii
 
-from PySide6.QtCore import QSignalBlocker, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPixmap
+from PySide6.QtCore import QSignalBlocker, Qt, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -30,13 +30,7 @@ from saga_seeker_skill_editor.gui.image_pipeline import (
     ImageSafetyError,
     inspect_image_bytes,
 )
-from saga_seeker_skill_editor.gui.theme_manager import (
-    BasicBackgroundMode,
-    THEME_TOKENS,
-    ThemeId,
-    refresh_widget_style,
-)
-from saga_seeker_skill_editor.resources import resource_path
+from saga_seeker_skill_editor.gui.theme_manager import refresh_widget_style
 
 
 PROFILE_LABELS = {
@@ -62,11 +56,6 @@ class CharacterDetailsWidget(QWidget):
         self._baseline_profiles: dict[str, str] = {}
         self._untouched_profile_keys: set[str] = set()
         self._comparison_loading = False
-        self._background_mode = BasicBackgroundMode.NONE
-        self._theme = ThemeId.LIGHT
-        self._background_pixmap: QPixmap | None = None
-        self._scaled_background: QPixmap | None = None
-        self._scaled_background_size = QSize()
         self.comparison_window: QDialog | None = None
 
         self.name_edit = QLineEdit()
@@ -249,53 +238,12 @@ class CharacterDetailsWidget(QWidget):
                 lambda key=key: self._profile_edited(key)
             )
 
-    def set_appearance(self, theme: ThemeId, background: BasicBackgroundMode) -> None:
-        self._theme = theme
-        self._background_mode = background
-        requested = (
-            background is BasicBackgroundMode.IMAGE
-            and theme is not ThemeId.HIGH_CONTRAST
-        )
-        if requested and self._background_pixmap is None:
-            self._background_pixmap = QPixmap(
-                str(resource_path("assets/basic-background-blurred.png"))
-            )
-        enabled = (
-            requested
-            and self._background_pixmap is not None
-            and not self._background_pixmap.isNull()
-        )
+    def set_background_enabled(self, enabled: bool) -> None:
         self.glass_layer.setProperty("backgroundEnabled", enabled)
         refresh_widget_style(self.glass_layer)
-        self.update()
-
-    def paintEvent(self, event) -> None:  # noqa: N802
-        super().paintEvent(event)
-        painter = QPainter(self)
-        if (
-            self._background_mode is BasicBackgroundMode.IMAGE
-            and self._theme is not ThemeId.HIGH_CONTRAST
-            and self._background_pixmap is not None
-            and not self._background_pixmap.isNull()
-        ):
-            if self._scaled_background_size != self.size():
-                self._scaled_background = self._background_pixmap.scaled(
-                    self.size(),
-                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-                self._scaled_background_size = self.size()
-            scaled = self._scaled_background
-            assert scaled is not None
-            left = (scaled.width() - self.width()) // 2
-            top = (scaled.height() - self.height()) // 2
-            source = scaled.rect().adjusted(left, top, -left, -top)
-            painter.drawPixmap(self.rect(), scaled, source)
-            overlay = QColor("#f1f8ff" if self._theme is ThemeId.LIGHT else "#0c1430")
-            overlay.setAlpha(168 if self._theme is ThemeId.LIGHT else 174)
-            painter.fillRect(self.rect(), overlay)
-        else:
-            painter.fillRect(self.rect(), QColor(THEME_TOKENS[self._theme].background))
+        for card in (self.identity_card, self.profile_card, self.image_card):
+            card.setProperty("backgroundEnabled", enabled)
+            refresh_widget_style(card)
 
     def _set_profile_expanded(self, key: str, expanded: bool) -> None:
         body = self.profile_bodies.get(key)

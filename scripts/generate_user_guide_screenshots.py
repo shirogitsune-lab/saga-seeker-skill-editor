@@ -36,8 +36,10 @@ SCREENSHOTS = (
     "19-high-contrast-theme.png",
     "20-status-edit.png",
 )
+BACKGROUND_REVIEW_TABS = ("basic", "status", "skill", "personality", "memory")
 BACKGROUND_SCREENSHOTS = tuple(
-    f"basic-{theme}-{mode}.png"
+    f"{tab}-{theme}-{mode}.png"
+    for tab in BACKGROUND_REVIEW_TABS
     for theme in ("light", "dark", "high_contrast")
     for mode in ("none", "image")
 )
@@ -232,12 +234,13 @@ def _generate_to_directory(args: argparse.Namespace, output_dir: Path) -> None:
         return state_workspace / f"ANON-GUIDE{suffix}"
 
     if args.background_review:
-        for theme in ThemeId:
-            for mode in BasicBackgroundMode:
-                window = new_window(theme)
-                window.edit_tabs.setCurrentIndex(window.basic_tab_index)
-                window.basic_background_actions[mode].trigger()
-                capture(f"basic-{theme.value}-{mode.value}.png", window)
+        for tab in BACKGROUND_REVIEW_TABS:
+            for theme in ThemeId:
+                for mode in BasicBackgroundMode:
+                    window = new_window(theme)
+                    window.edit_tabs.setCurrentIndex(getattr(window, f"{tab}_tab_index"))
+                    window.basic_background_actions[mode].trigger()
+                    capture(f"{tab}-{theme.value}-{mode.value}.png", window)
         settings_file = output_dir / ".screenshot-settings.ini"
         settings_file.unlink(missing_ok=True)
         shutil.rmtree(state_workspace)

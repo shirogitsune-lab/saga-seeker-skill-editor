@@ -78,6 +78,7 @@ The original input file is not an in-place editing target. Safety and preservati
 - Prompts Save As, Discard, or Cancel before leaving with unsaved changes.
 - Preserves current edits after recoverable save errors.
 - Provides light, dark, and high-contrast themes through `QSettings`.
+- Offers a persisted background none/image choice across all five tabs. The blurred garden canvas and translucent chrome/cards are active only in light/dark; high contrast always uses opaque surfaces.
 - Defaults to light when no valid theme has been saved.
 - Supports windowed or maximized startup display.
 - Keeps technical fields and destructive actions behind progressive disclosure.

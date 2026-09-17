@@ -10,15 +10,50 @@ QMainWindow, QMenuBar, QMenu {
 QWidget#appRoot {
     background: @CANVAS@;
 }
+QWidget#appRoot[backgroundEnabled="true"],
+QMenuBar[backgroundEnabled="true"],
+QScrollArea[backgroundEnabled="true"],
+QWidget[glassViewport="true"][backgroundEnabled="true"],
+QWidget#skillPage[backgroundEnabled="true"],
+QStackedWidget#skillEditorStack[backgroundEnabled="true"] {
+    background: transparent;
+}
 QFrame#summaryPanel, QFrame#statusBar, QFrame#editorPanel, QFrame#pickerPanel {
     background: @PANEL@;
     border: @BORDER_WIDTH@ solid @BORDER@;
     border-radius: 10px;
 }
+QFrame#summaryPanel[backgroundEnabled="true"],
+QFrame#statusBar[backgroundEnabled="true"] {
+    background: @CHROME_GLASS@;
+    border: 1px solid @GLASS_BORDER@;
+}
 QFrame#basicIdentityCard, QFrame#basicProfileCard, QFrame#basicImageCard {
     background: @SURFACE@;
     border: @BORDER_WIDTH@ solid @BORDER@;
     border-radius: 12px;
+}
+QFrame#statusCard, QFrame#skillListCard,
+QFrame#memoryListCard, QFrame#memoryEditorCard {
+    background: @SURFACE@;
+    border: @BORDER_WIDTH@ solid @BORDER@;
+    border-radius: 12px;
+}
+QFrame#basicIdentityCard[backgroundEnabled="true"],
+QFrame#basicProfileCard[backgroundEnabled="true"],
+QFrame#basicImageCard[backgroundEnabled="true"],
+QFrame#statusCard[backgroundEnabled="true"],
+QFrame#skillListCard[backgroundEnabled="true"],
+QFrame#memoryListCard[backgroundEnabled="true"],
+QFrame#memoryEditorCard[backgroundEnabled="true"],
+QFrame#editorPanel[backgroundEnabled="true"],
+QFrame#pickerPanel[backgroundEnabled="true"] {
+    background: @CARD_GLASS@;
+    border: 1px solid rgba(130, 195, 225, 55);
+    border-top: 1px solid @CARD_HIGHLIGHT@;
+    border-left: 1px solid @CARD_HIGHLIGHT@;
+    border-right: 2px solid rgba(0, 0, 0, 65);
+    border-bottom: 2px solid rgba(0, 0, 0, 120);
 }
 QFrame#basicGlassLayer {
     background: @PANEL@;
@@ -27,7 +62,7 @@ QFrame#basicGlassLayer {
 }
 QFrame#basicGlassLayer[backgroundEnabled="true"] {
     background: @GLASS@;
-    border: 1px solid @GLASS_BORDER@;
+    border: 0;
 }
 QFrame#editorPanel[dragActive="true"] {
     border: @FOCUS_WIDTH@ solid @FOCUS@;
@@ -266,6 +301,10 @@ QTabWidget::pane {
 }
 QTabWidget[basicActive="true"]::pane {
     border: @BORDER_WIDTH@ solid @PANE_BORDER@;
+}
+QTabWidget[backgroundEnabled="true"]::pane {
+    border: 0;
+    background: transparent;
 }
 QTabBar::tab {
     background: @BUTTON@;

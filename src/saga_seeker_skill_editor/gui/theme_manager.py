@@ -84,6 +84,9 @@ class ThemeTokens:
     splitter: str
     glass: str
     glass_border: str
+    chrome_glass: str
+    card_glass: str
+    card_highlight: str
     pane_border: str
     border_width: str
     focus_width: str
@@ -125,8 +128,11 @@ THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
         danger_background="#f6dde1",
         danger_text="#7f1527",
         splitter="#7b8994",
-        glass="rgba(248, 252, 255, 145)",
+        glass="rgba(248, 252, 255, 72)",
         glass_border="rgba(255, 255, 255, 190)",
+        chrome_glass="rgba(250, 253, 255, 115)",
+        card_glass="rgba(255, 255, 255, 125)",
+        card_highlight="rgba(255, 255, 255, 230)",
         pane_border="#cad8e3",
         border_width="1px",
         focus_width="2px",
@@ -163,8 +169,11 @@ THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
         danger_background="#5a2d35",
         danger_text="#ffe2e6",
         splitter="#4b5963",
-        glass="rgba(17, 28, 49, 155)",
+        glass="rgba(17, 28, 49, 92)",
         glass_border="rgba(163, 190, 216, 80)",
+        chrome_glass="rgba(18, 28, 46, 95)",
+        card_glass="rgba(30, 42, 61, 105)",
+        card_highlight="rgba(162, 229, 245, 165)",
         pane_border="#46576a",
         border_width="1px",
         focus_width="2px",
@@ -203,6 +212,9 @@ THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
         splitter="#ffffff",
         glass="#0c0c0c",
         glass_border="#f5f5f5",
+        chrome_glass="#0c0c0c",
+        card_glass="#000000",
+        card_highlight="#f5f5f5",
         pane_border="#f5f5f5",
         border_width="2px",
         focus_width="3px",

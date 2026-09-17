@@ -132,20 +132,74 @@ def test_basic_background_setting_and_high_contrast_suppression(tmp_path: Path) 
 
     actions[BasicBackgroundMode.IMAGE].trigger()
     assert manager.settings.value(BACKGROUND_SETTINGS_KEY) == "image"
+    assert window._background_visible is False
+    window.content_stack.setCurrentWidget(window.loaded_page)
+    assert window._background_visible is True
+    assert window.centralWidget().property("backgroundEnabled") is True
+    assert window.summary_panel.property("backgroundEnabled") is True
+    assert window.status_bar.property("backgroundEnabled") is True
+    assert window.edit_tabs.property("backgroundEnabled") is True
+    assert window.basic_scroll.viewport().property("backgroundEnabled") is True
+    assert window.basic_scroll.viewport().autoFillBackground() is False
+    assert window.character_details_editor.autoFillBackground() is False
     assert window.character_details_editor.glass_layer.property("backgroundEnabled") is True
-    assert window.character_details_editor._background_pixmap is not None
-    assert not window.character_details_editor._background_pixmap.isNull()
+    for card in (
+        window.character_details_editor.identity_card,
+        window.character_details_editor.profile_card,
+        window.character_details_editor.image_card,
+    ):
+        assert card.property("backgroundEnabled") is True
+    assert window._background_pixmap is not None
+    assert not window._background_pixmap.isNull()
+
+    for tab_index, card in (
+        (window.status_tab_index, window.status_editor.card),
+        (window.skill_tab_index, window.skill_list_card),
+        (window.personality_tab_index, window.personality_editor.slot_panel),
+        (window.memory_tab_index, window.memory_editor.list_card),
+    ):
+        window.edit_tabs.setCurrentIndex(tab_index)
+        assert window._background_visible is True
+        assert card.property("backgroundEnabled") is True
+        assert window.centralWidget().property("backgroundEnabled") is True
+    window.edit_tabs.setCurrentIndex(window.basic_tab_index)
 
     window.appearance_actions[ThemeId.HIGH_CONTRAST].trigger()
     assert actions[BasicBackgroundMode.IMAGE].isChecked()
+    assert window._background_visible is False
     assert window.character_details_editor.glass_layer.property("backgroundEnabled") is False
+    for tab_index, card in (
+        (window.status_tab_index, window.status_editor.card),
+        (window.skill_tab_index, window.skill_list_card),
+        (window.personality_tab_index, window.personality_editor.slot_panel),
+        (window.memory_tab_index, window.memory_editor.list_card),
+    ):
+        window.edit_tabs.setCurrentIndex(tab_index)
+        assert window._background_visible is False
+        assert card.property("backgroundEnabled") is False
+    window.edit_tabs.setCurrentIndex(window.basic_tab_index)
 
     window.appearance_actions[ThemeId.DARK].trigger()
+    assert window._background_visible is True
     assert window.character_details_editor.glass_layer.property("backgroundEnabled") is True
 
     restored = MainWindow(theme_manager=_manager(tmp_path))
     assert restored.basic_background_mode is BasicBackgroundMode.IMAGE
     assert restored.basic_background_actions[BasicBackgroundMode.IMAGE].isChecked()
+
+
+def test_glass_opacity_preserves_input_layer() -> None:
+    for theme in (ThemeId.LIGHT, ThemeId.DARK):
+        tokens = THEME_TOKENS[theme]
+        card_alpha = int(tokens.card_glass.rsplit(",", 1)[1].rstrip(") "))
+        chrome_alpha = int(tokens.chrome_glass.rsplit(",", 1)[1].rstrip(") "))
+        assert 100 <= card_alpha <= 130
+        assert chrome_alpha < card_alpha
+        assert tokens.input.startswith("#")
+        assert tokens.text.startswith("#")
+    high_contrast = THEME_TOKENS[ThemeId.HIGH_CONTRAST]
+    assert high_contrast.card_glass.startswith("#")
+    assert high_contrast.chrome_glass.startswith("#")
 
 
 def test_invalid_basic_background_setting_restores_plain_background(tmp_path: Path) -> None:

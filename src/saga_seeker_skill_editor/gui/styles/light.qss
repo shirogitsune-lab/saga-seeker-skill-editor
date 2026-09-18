@@ -7,10 +7,61 @@ QMainWindow, QMenuBar, QMenu {
     background: @BACKGROUND@;
     color: @TEXT@;
 }
+QWidget#appRoot {
+    background: @CANVAS@;
+}
+QWidget#appRoot[backgroundEnabled="true"],
+QMenuBar[backgroundEnabled="true"],
+QScrollArea[backgroundEnabled="true"],
+QWidget[glassViewport="true"][backgroundEnabled="true"],
+QWidget#skillPage[backgroundEnabled="true"],
+QStackedWidget#skillEditorStack[backgroundEnabled="true"] {
+    background: transparent;
+}
 QFrame#summaryPanel, QFrame#statusBar, QFrame#editorPanel, QFrame#pickerPanel {
     background: @PANEL@;
     border: @BORDER_WIDTH@ solid @BORDER@;
-    border-radius: 4px;
+    border-radius: 10px;
+}
+QFrame#summaryPanel[backgroundEnabled="true"],
+QFrame#statusBar[backgroundEnabled="true"] {
+    background: @CHROME_GLASS@;
+    border: 1px solid @GLASS_BORDER@;
+}
+QFrame#basicIdentityCard, QFrame#basicProfileCard, QFrame#basicImageCard {
+    background: @SURFACE@;
+    border: @BORDER_WIDTH@ solid @BORDER@;
+    border-radius: 12px;
+}
+QFrame#statusCard, QFrame#skillListCard,
+QFrame#memoryListCard, QFrame#memoryEditorCard {
+    background: @SURFACE@;
+    border: @BORDER_WIDTH@ solid @BORDER@;
+    border-radius: 12px;
+}
+QFrame#basicIdentityCard[backgroundEnabled="true"],
+QFrame#basicProfileCard[backgroundEnabled="true"],
+QFrame#basicImageCard[backgroundEnabled="true"],
+QFrame#statusCard[backgroundEnabled="true"],
+QFrame#skillListCard[backgroundEnabled="true"],
+QFrame#memoryListCard[backgroundEnabled="true"],
+QFrame#memoryEditorCard[backgroundEnabled="true"],
+QFrame#editorPanel[backgroundEnabled="true"],
+QFrame#pickerPanel[backgroundEnabled="true"] {
+    background: @CARD_GLASS@;
+    border: 1px solid rgba(255, 255, 255, 80);
+    border-top: 1px solid @CARD_HIGHLIGHT@;
+    border-left: 1px solid @CARD_HIGHLIGHT@;
+    border-bottom: 2px solid rgba(20, 35, 55, 38);
+}
+QFrame#basicGlassLayer {
+    background: @PANEL@;
+    border: 1px solid @PANE_BORDER@;
+    border-radius: 16px;
+}
+QFrame#basicGlassLayer[backgroundEnabled="true"] {
+    background: @GLASS@;
+    border: 0;
 }
 QFrame#editorPanel[dragActive="true"] {
     border: @FOCUS_WIDTH@ solid @FOCUS@;
@@ -27,6 +78,15 @@ QLabel#characterName {
 QLabel#sectionHeading {
     color: @HEADING@;
     font-size: 11pt;
+    font-weight: 600;
+}
+QLabel#cardHeading {
+    color: @HEADING@;
+    font-size: 13pt;
+    font-weight: 700;
+}
+QLabel#fieldLabel {
+    color: @TEXT@;
     font-weight: 600;
 }
 QLabel#mutedText, QLabel#technicalValue {
@@ -54,15 +114,15 @@ QLabel[state="unloaded"] {
 QLabel[badge="true"] {
     background: @BADGE_BACKGROUND@;
     border: @BORDER_WIDTH@ solid @BORDER@;
-    border-radius: 3px;
-    padding: 2px 7px;
+    border-radius: 6px;
+    padding: 3px 8px;
     color: @BADGE_TEXT@;
 }
 QPushButton {
-    min-height: 30px;
-    padding: 3px 12px;
+    min-height: 34px;
+    padding: 4px 12px;
     border: @BORDER_WIDTH@ solid @BORDER@;
-    border-radius: 4px;
+    border-radius: 8px;
     background: @BUTTON@;
     color: @TEXT@;
 }
@@ -73,7 +133,7 @@ QPushButton:hover {
 QPushButton:pressed {
     background: @BUTTON_PRESSED@;
 }
-QPushButton:disabled {
+QPushButton:disabled, QPushButton[role="primary"]:disabled {
     background: @DISABLED_BACKGROUND@;
     color: @DISABLED@;
     border-color: @BORDER@;
@@ -103,9 +163,9 @@ QPushButton[accordion="true"] {
     font-weight: 600;
 }
 QPushButton[accordion="true"]:checked {
-    background: @SELECTION@;
+    background: @ALTERNATE@;
     border: @FOCUS_WIDTH@ solid @FOCUS@;
-    color: @SELECTION_TEXT@;
+    color: @TEXT@;
 }
 QPushButton[category="true"] {
     min-height: 38px;
@@ -133,7 +193,7 @@ QLabel#filterLabel {
     font-size: 10pt;
     font-weight: 600;
 }
-QLineEdit, QTextEdit, QComboBox {
+QLineEdit, QTextEdit, QPlainTextEdit, QComboBox {
     background: @INPUT@;
     color: @TEXT@;
     border: @BORDER_WIDTH@ solid @BORDER@;
@@ -159,13 +219,13 @@ QComboBox QAbstractItemView {
     selection-color: @SELECTION_TEXT@;
     border: @BORDER_WIDTH@ solid @BORDER@;
 }
-QTextEdit {
-    padding: 6px;
+QTextEdit, QPlainTextEdit {
+    padding: 8px;
 }
-QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QTreeWidget:focus {
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QTreeWidget:focus {
     border: @FOCUS_WIDTH@ solid @FOCUS@;
 }
-QLineEdit:disabled, QTextEdit:disabled, QComboBox:disabled {
+QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QComboBox:disabled {
     background: @DISABLED_BACKGROUND@;
     color: @DISABLED@;
     border-color: @BORDER@;
@@ -218,6 +278,9 @@ QSplitter::handle {
     background: @SPLITTER@;
     width: 2px;
 }
+QSplitter#basicContentSplitter::handle {
+    background: transparent;
+}
 QMenuBar::item:selected, QMenu::item:selected {
     background: @SELECTION@;
     color: @SELECTION_TEXT@;
@@ -232,13 +295,23 @@ QRadioButton:disabled, QCheckBox:disabled {
 }
 QTabWidget::pane {
     border: @BORDER_WIDTH@ solid @BORDER@;
+    border-radius: 10px;
     background: @BACKGROUND@;
+}
+QTabWidget[basicActive="true"]::pane {
+    border: @BORDER_WIDTH@ solid @PANE_BORDER@;
+}
+QTabWidget[backgroundEnabled="true"]::pane {
+    border: 0;
+    background: transparent;
 }
 QTabBar::tab {
     background: @BUTTON@;
     color: @TEXT@;
     border: @BORDER_WIDTH@ solid @BORDER@;
-    padding: 7px 16px;
+    border-radius: 7px;
+    margin-right: 4px;
+    padding: 9px 18px;
 }
 QTabBar::tab:selected {
     background: @PANEL@;

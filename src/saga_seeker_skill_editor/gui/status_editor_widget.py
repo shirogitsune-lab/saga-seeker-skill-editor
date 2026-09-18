@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QSignalBlocker, Signal
-from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QWidget
+from PySide6.QtWidgets import QComboBox, QFormLayout, QFrame, QLabel, QVBoxLayout, QWidget
 
 from saga_seeker_skill_editor.core.character_sheet import (
     CharacterSheet,
@@ -34,7 +34,10 @@ class StatusEditorWidget(QWidget):
         self.message.setWordWrap(True)
         self.message.setObjectName("mutedText")
         self.rank_boxes: dict[str, QComboBox] = {}
-        form = QFormLayout(self)
+        self.card = QFrame()
+        self.card.setObjectName("statusCard")
+        form = QFormLayout(self.card)
+        form.setContentsMargins(18, 18, 18, 18)
         form.addRow(self.message)
         for key, _english_label in STATUS_HTML_FIELDS:
             box = QComboBox()
@@ -45,6 +48,10 @@ class StatusEditorWidget(QWidget):
             )
             self.rank_boxes[key] = box
             form.addRow(STATUS_LABELS[key], box)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.addWidget(self.card)
+        layout.addStretch(1)
 
     def set_sheet(
         self,

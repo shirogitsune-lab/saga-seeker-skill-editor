@@ -18,6 +18,7 @@ from saga_seeker_skill_editor.resources import package_resource_path
 ORGANIZATION_NAME = "shirogitsune-lab"
 APPLICATION_NAME = "SagaSeekerSkillEditor"
 SETTINGS_KEY = "appearance/theme"
+BACKGROUND_SETTINGS_KEY = "appearance/basic_background"
 
 
 class ThemeId(str, Enum):
@@ -26,13 +27,35 @@ class ThemeId(str, Enum):
     HIGH_CONTRAST = "high_contrast"
 
 
+class BasicBackgroundMode(str, Enum):
+    NONE = "none"
+    IMAGE = "image"
+
+
+def restore_basic_background(settings: QSettings) -> BasicBackgroundMode:
+    stored = settings.value(BACKGROUND_SETTINGS_KEY, BasicBackgroundMode.NONE.value)
+    try:
+        return BasicBackgroundMode(str(stored))
+    except ValueError:
+        settings.setValue(BACKGROUND_SETTINGS_KEY, BasicBackgroundMode.NONE.value)
+        settings.sync()
+        return BasicBackgroundMode.NONE
+
+
+def save_basic_background(settings: QSettings, mode: BasicBackgroundMode) -> None:
+    settings.setValue(BACKGROUND_SETTINGS_KEY, mode.value)
+    settings.sync()
+
+
 DEFAULT_THEME = ThemeId.LIGHT
 
 
 @dataclass(frozen=True)
 class ThemeTokens:
     background: str
+    canvas: str
     panel: str
+    surface: str
     input: str
     border: str
     text: str
@@ -59,6 +82,12 @@ class ThemeTokens:
     danger_background: str
     danger_text: str
     splitter: str
+    glass: str
+    glass_border: str
+    chrome_glass: str
+    card_glass: str
+    card_highlight: str
+    pane_border: str
     border_width: str
     focus_width: str
     selection_border_width: str
@@ -69,8 +98,10 @@ class ThemeTokens:
 
 THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
     ThemeId.LIGHT: ThemeTokens(
-        background="#e7ebef",
-        panel="#f7f9fa",
+        background="#eaf1f8",
+        canvas="qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #e8f4f8, stop:1 #f1edfa)",
+        panel="#f6faff",
+        surface="#ffffff",
         input="#ffffff",
         border="#6f7d88",
         text="#17212b",
@@ -97,15 +128,23 @@ THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
         danger_background="#f6dde1",
         danger_text="#7f1527",
         splitter="#7b8994",
+        glass="rgba(248, 252, 255, 72)",
+        glass_border="rgba(255, 255, 255, 190)",
+        chrome_glass="rgba(250, 253, 255, 115)",
+        card_glass="rgba(255, 255, 255, 125)",
+        card_highlight="rgba(255, 255, 255, 230)",
+        pane_border="#cad8e3",
         border_width="1px",
         focus_width="2px",
         selection_border_width="0px",
     ),
     ThemeId.DARK: ThemeTokens(
-        background="#11161a",
-        panel="#20282e",
+        background="#111725",
+        canvas="qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #102333, stop:1 #1c1830)",
+        panel="#1b2634",
+        surface="#233142",
         input="#080e12",
-        border="#647681",
+        border="#8b9cab",
         text="#edf2f5",
         muted_text="#b7c1c9",
         accent="#2697b1",
@@ -130,13 +169,21 @@ THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
         danger_background="#5a2d35",
         danger_text="#ffe2e6",
         splitter="#4b5963",
+        glass="rgba(17, 28, 49, 92)",
+        glass_border="rgba(163, 190, 216, 80)",
+        chrome_glass="rgba(18, 28, 46, 95)",
+        card_glass="rgba(30, 42, 61, 105)",
+        card_highlight="rgba(162, 229, 245, 165)",
+        pane_border="#46576a",
         border_width="1px",
         focus_width="2px",
         selection_border_width="0px",
     ),
     ThemeId.HIGH_CONTRAST: ThemeTokens(
         background="#030303",
+        canvas="#030303",
         panel="#0c0c0c",
+        surface="#000000",
         input="#000000",
         border="#f5f5f5",
         text="#ffffff",
@@ -163,6 +210,12 @@ THEME_TOKENS: dict[ThemeId, ThemeTokens] = {
         danger_background="#300009",
         danger_text="#ffffff",
         splitter="#ffffff",
+        glass="#0c0c0c",
+        glass_border="#f5f5f5",
+        chrome_glass="#0c0c0c",
+        card_glass="#000000",
+        card_highlight="#f5f5f5",
+        pane_border="#f5f5f5",
         border_width="2px",
         focus_width="3px",
         selection_border_width="2px",

@@ -8,6 +8,7 @@ from PySide6.QtCore import QSignalBlocker, Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -96,8 +97,10 @@ class MemoryEditorWidget(QWidget):
         destructive_actions.addWidget(self.replace_button)
         destructive_actions.addWidget(self.remove_button)
 
-        left = QWidget()
-        left_layout = QVBoxLayout(left)
+        self.list_card = QFrame()
+        self.list_card.setObjectName("memoryListCard")
+        left_layout = QVBoxLayout(self.list_card)
+        left_layout.setContentsMargins(12, 12, 12, 12)
         left_layout.addWidget(self.memory_list, 1)
         left_layout.addLayout(list_actions)
         left_layout.addLayout(destructive_actions)
@@ -154,8 +157,10 @@ class MemoryEditorWidget(QWidget):
         ):
             tag_actions.addWidget(button)
 
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
+        self.editor_card = QFrame()
+        self.editor_card.setObjectName("memoryEditorCard")
+        right_layout = QVBoxLayout(self.editor_card)
+        right_layout.setContentsMargins(12, 12, 12, 12)
         right_layout.addWidget(self.message)
         right_layout.addLayout(form)
         right_layout.addWidget(QLabel("タグ（順序・重複・空文字を保持）"))
@@ -163,12 +168,14 @@ class MemoryEditorWidget(QWidget):
         right_layout.addLayout(tag_actions)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(left)
-        splitter.addWidget(right)
+        splitter.setHandleWidth(12)
+        splitter.addWidget(self.list_card)
+        splitter.addWidget(self.editor_card)
         splitter.setChildrenCollapsible(False)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 2)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
         layout.addWidget(splitter)
 
     def set_sheet(

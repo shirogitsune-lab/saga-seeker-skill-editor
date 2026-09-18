@@ -17,6 +17,8 @@ from saga_seeker_skill_editor.gui.main_window import MainState, MainWindow  # no
 from saga_seeker_skill_editor.main import build_parser  # noqa: E402
 from saga_seeker_skill_editor.gui.theme_manager import (  # noqa: E402
     APPLICATION_NAME,
+    BACKGROUND_SETTINGS_KEY,
+    BasicBackgroundMode,
     DEFAULT_THEME,
     ORGANIZATION_NAME,
     REQUIRED_TOKENS,
@@ -110,6 +112,102 @@ def test_three_exclusive_actions_exist_and_theme_change_is_saved(tmp_path: Path)
     assert manager.settings.value(SETTINGS_KEY) == ThemeId.DARK.value
     assert window.appearance_actions[ThemeId.DARK].isChecked()
     assert sum(action.isChecked() for action in window.appearance_actions.values()) == 1
+
+
+def test_basic_background_setting_and_high_contrast_suppression(tmp_path: Path) -> None:
+    manager = _manager(tmp_path)
+    manager.restore_theme()
+    window = MainWindow(theme_manager=manager)
+    actions = window.basic_background_actions
+
+    assert window.basic_background_action_group.isExclusive()
+    assert set(actions) == {BasicBackgroundMode.NONE, BasicBackgroundMode.IMAGE}
+    assert actions[BasicBackgroundMode.NONE].isChecked()
+    assert not manager.settings.contains(BACKGROUND_SETTINGS_KEY)
+    assert window.edit_tabs.property("basicActive") is True
+    window.edit_tabs.setCurrentIndex(window.status_tab_index)
+    assert window.edit_tabs.property("basicActive") is False
+    window.edit_tabs.setCurrentIndex(window.basic_tab_index)
+    assert window.edit_tabs.property("basicActive") is True
+
+    actions[BasicBackgroundMode.IMAGE].trigger()
+    assert manager.settings.value(BACKGROUND_SETTINGS_KEY) == "image"
+    assert window._background_visible is False
+    window.content_stack.setCurrentWidget(window.loaded_page)
+    assert window._background_visible is True
+    assert window.centralWidget().property("backgroundEnabled") is True
+    assert window.summary_panel.property("backgroundEnabled") is True
+    assert window.status_bar.property("backgroundEnabled") is True
+    assert window.edit_tabs.property("backgroundEnabled") is True
+    assert window.basic_scroll.viewport().property("backgroundEnabled") is True
+    assert window.basic_scroll.viewport().autoFillBackground() is False
+    assert window.character_details_editor.autoFillBackground() is False
+    assert window.character_details_editor.glass_layer.property("backgroundEnabled") is True
+    for card in (
+        window.character_details_editor.identity_card,
+        window.character_details_editor.profile_card,
+        window.character_details_editor.image_card,
+    ):
+        assert card.property("backgroundEnabled") is True
+    assert window._background_pixmap is not None
+    assert not window._background_pixmap.isNull()
+
+    for tab_index, card in (
+        (window.status_tab_index, window.status_editor.card),
+        (window.skill_tab_index, window.skill_list_card),
+        (window.personality_tab_index, window.personality_editor.slot_panel),
+        (window.memory_tab_index, window.memory_editor.list_card),
+    ):
+        window.edit_tabs.setCurrentIndex(tab_index)
+        assert window._background_visible is True
+        assert card.property("backgroundEnabled") is True
+        assert window.centralWidget().property("backgroundEnabled") is True
+    window.edit_tabs.setCurrentIndex(window.basic_tab_index)
+
+    window.appearance_actions[ThemeId.HIGH_CONTRAST].trigger()
+    assert actions[BasicBackgroundMode.IMAGE].isChecked()
+    assert window._background_visible is False
+    assert window.character_details_editor.glass_layer.property("backgroundEnabled") is False
+    for tab_index, card in (
+        (window.status_tab_index, window.status_editor.card),
+        (window.skill_tab_index, window.skill_list_card),
+        (window.personality_tab_index, window.personality_editor.slot_panel),
+        (window.memory_tab_index, window.memory_editor.list_card),
+    ):
+        window.edit_tabs.setCurrentIndex(tab_index)
+        assert window._background_visible is False
+        assert card.property("backgroundEnabled") is False
+    window.edit_tabs.setCurrentIndex(window.basic_tab_index)
+
+    window.appearance_actions[ThemeId.DARK].trigger()
+    assert window._background_visible is True
+    assert window.character_details_editor.glass_layer.property("backgroundEnabled") is True
+
+    restored = MainWindow(theme_manager=_manager(tmp_path))
+    assert restored.basic_background_mode is BasicBackgroundMode.IMAGE
+    assert restored.basic_background_actions[BasicBackgroundMode.IMAGE].isChecked()
+
+
+def test_glass_opacity_preserves_input_layer() -> None:
+    for theme in (ThemeId.LIGHT, ThemeId.DARK):
+        tokens = THEME_TOKENS[theme]
+        card_alpha = int(tokens.card_glass.rsplit(",", 1)[1].rstrip(") "))
+        chrome_alpha = int(tokens.chrome_glass.rsplit(",", 1)[1].rstrip(") "))
+        assert 100 <= card_alpha <= 130
+        assert chrome_alpha < card_alpha
+        assert tokens.input.startswith("#")
+        assert tokens.text.startswith("#")
+    high_contrast = THEME_TOKENS[ThemeId.HIGH_CONTRAST]
+    assert high_contrast.card_glass.startswith("#")
+    assert high_contrast.chrome_glass.startswith("#")
+
+
+def test_invalid_basic_background_setting_restores_plain_background(tmp_path: Path) -> None:
+    manager = _manager(tmp_path)
+    manager.settings.setValue(BACKGROUND_SETTINGS_KEY, "invalid")
+    window = MainWindow(theme_manager=manager)
+    assert window.basic_background_mode is BasicBackgroundMode.NONE
+    assert manager.settings.value(BACKGROUND_SETTINGS_KEY) == "none"
 
 
 def test_saved_theme_is_restored_by_next_manager(tmp_path: Path) -> None:
@@ -285,6 +383,20 @@ def test_theme_contrast_targets(theme: ThemeId) -> None:
     ]
     assert all(_contrast(foreground, background) >= 4.5 for foreground, background in normal_pairs)
     assert all(_contrast(foreground, background) >= 3.0 for foreground, background in ui_pairs)
+
+
+@pytest.mark.parametrize("theme", list(ThemeId))
+def test_basic_cards_and_profile_editors_are_legible_in_each_theme(
+    tmp_path: Path, theme: ThemeId
+) -> None:
+    manager = _manager(tmp_path)
+    qss = manager._load_qss(theme)
+    tokens = THEME_TOKENS[theme]
+
+    assert "QFrame#basicIdentityCard, QFrame#basicProfileCard, QFrame#basicImageCard" in qss
+    assert "QPlainTextEdit:focus" in qss
+    assert _contrast(tokens.text, tokens.surface) >= 4.5
+    assert _contrast(tokens.border, tokens.surface) >= 3.0
 
 
 def test_packaging_configuration_includes_theme_resources() -> None:

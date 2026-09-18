@@ -339,6 +339,19 @@ def test_profile_accordion_toggles_without_changing_the_draft() -> None:
     assert not draft.has_changes
 
 
+def test_basic_information_cards_keep_existing_editors() -> None:
+    _app()
+    details = CharacterDetailsWidget()
+
+    assert details.identity_card.objectName() == "basicIdentityCard"
+    assert details.profile_card.objectName() == "basicProfileCard"
+    assert details.image_card.objectName() == "basicImageCard"
+    assert details.identity_card.isAncestorOf(details.name_edit)
+    assert details.profile_card.isAncestorOf(details.profile_edits["basicSettings"])
+    assert details.image_card.isAncestorOf(details.icon_preview)
+    assert details.content_splitter.widget(1).isAncestorOf(details.image_card)
+
+
 def test_memory_widget_add_edit_move_and_placeholder_fill() -> None:
     _app()
     sheet = _blank_sheet()

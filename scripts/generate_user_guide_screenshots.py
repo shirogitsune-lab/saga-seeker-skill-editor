@@ -36,12 +36,20 @@ SCREENSHOTS = (
     "19-high-contrast-theme.png",
     "20-status-edit.png",
 )
+BACKGROUND_REVIEW_TABS = ("basic", "status", "skill", "personality", "memory")
+BACKGROUND_SCREENSHOTS = tuple(
+    f"{tab}-{theme}-{mode}.png"
+    for tab in BACKGROUND_REVIEW_TABS
+    for theme in ("light", "dark", "high_contrast")
+    for mode in ("none", "image")
+)
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("offscreen", "formal"), required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--background-review", action="store_true")
     return parser.parse_args()
 
 
@@ -81,7 +89,11 @@ def _generate_to_directory(args: argparse.Namespace, output_dir: Path) -> None:
         MainWindow,
         MarkdownImportPreviewDialog,
     )
-    from saga_seeker_skill_editor.gui.theme_manager import ThemeId, ThemeManager
+    from saga_seeker_skill_editor.gui.theme_manager import (
+        BasicBackgroundMode,
+        ThemeId,
+        ThemeManager,
+    )
     from saga_seeker_skill_editor.resources import resource_path
 
     app = QApplication.instance() or QApplication([])
@@ -220,6 +232,19 @@ def _generate_to_directory(args: argparse.Namespace, output_dir: Path) -> None:
 
     def temporary_state_path(suffix: str) -> Path:
         return state_workspace / f"ANON-GUIDE{suffix}"
+
+    if args.background_review:
+        for tab in BACKGROUND_REVIEW_TABS:
+            for theme in ThemeId:
+                for mode in BasicBackgroundMode:
+                    window = new_window(theme)
+                    window.edit_tabs.setCurrentIndex(getattr(window, f"{tab}_tab_index"))
+                    window.basic_background_actions[mode].trigger()
+                    capture(f"{tab}-{theme.value}-{mode.value}.png", window)
+        settings_file = output_dir / ".screenshot-settings.ini"
+        settings_file.unlink(missing_ok=True)
+        shutil.rmtree(state_workspace)
+        return
 
     capture(SCREENSHOTS[0], new_window(loaded=False))
 
@@ -385,9 +410,10 @@ def _run(args: argparse.Namespace) -> None:
     )
     try:
         _generate_to_directory(args, staged)
+        expected_names = BACKGROUND_SCREENSHOTS if args.background_review else SCREENSHOTS
         validate_screenshot_directory(
             staged,
-            expected_names=SCREENSHOTS,
+            expected_names=expected_names,
             expected_size=IMAGE_SIZE,
         )
         replace_directory_atomically(staged, output_dir)
@@ -395,7 +421,7 @@ def _run(args: argparse.Namespace) -> None:
         if staged.exists():
             shutil.rmtree(staged)
     print(
-        f"{args.mode}: {len(SCREENSHOTS)} images, "
+        f"{args.mode}: {len(expected_names)} images, "
         f"{IMAGE_SIZE[0]}x{IMAGE_SIZE[1]}, dataset={DATASET_ID}"
     )
 

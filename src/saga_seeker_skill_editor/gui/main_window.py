@@ -8,8 +8,16 @@ from enum import Enum
 from pathlib import Path
 from uuid import uuid4
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import (
+    QAction,
+    QActionGroup,
+    QColor,
+    QCloseEvent,
+    QKeySequence,
+    QPainter,
+    QPixmap,
+)
 from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
@@ -90,7 +98,15 @@ from saga_seeker_skill_editor.gui.personality_editor_widget import PersonalityEd
 from saga_seeker_skill_editor.gui.skill_editor_widget import SkillEditorWidget
 from saga_seeker_skill_editor.gui.skill_list_widget import SkillListWidget
 from saga_seeker_skill_editor.gui.status_editor_widget import StatusEditorWidget
-from saga_seeker_skill_editor.gui.theme_manager import DEFAULT_THEME, ThemeId, ThemeManager, refresh_widget_style
+from saga_seeker_skill_editor.gui.theme_manager import (
+    DEFAULT_THEME,
+    BasicBackgroundMode,
+    ThemeId,
+    ThemeManager,
+    refresh_widget_style,
+    restore_basic_background,
+    save_basic_background,
+)
 from saga_seeker_skill_editor.gui.vacant_slot_editor_widget import VacantSlotEditorWidget
 from saga_seeker_skill_editor.gui.window_preferences import (
     StartupDisplayMode,
@@ -264,6 +280,11 @@ class MainWindow(QMainWindow):
             theme_manager.apply_theme(DEFAULT_THEME, persist=False)
         self.theme_manager = theme_manager
         self.startup_display_mode = restore_startup_display(theme_manager.settings)
+        self.basic_background_mode = restore_basic_background(theme_manager.settings)
+        self._background_visible = False
+        self._background_pixmap: QPixmap | None = None
+        self._scaled_background: QPixmap | None = None
+        self._scaled_background_size = QSize()
         self.setWindowTitle("Saga & Seeker キャラクターシートエディター")
         self.resize(1100, 760)
         self.setMinimumSize(860, 600)
@@ -296,16 +317,46 @@ class MainWindow(QMainWindow):
         self._create_menu()
 
         root_layout = QVBoxLayout()
-        root_layout.setContentsMargins(10, 10, 10, 10)
-        root_layout.setSpacing(8)
+        root_layout.setContentsMargins(16, 14, 16, 12)
+        root_layout.setSpacing(12)
         root_layout.addWidget(self.summary_panel)
         root_layout.addWidget(self.content_stack, 1)
         root_layout.addWidget(self.status_bar)
         root = QWidget()
+        root.setObjectName("appRoot")
         root.setLayout(root_layout)
         self.setCentralWidget(root)
+        self._sync_window_background()
         self.setAcceptDrops(True)
         self._sync_ui_state()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        super().paintEvent(event)
+        if not self._background_visible or self._background_pixmap is None:
+            return
+        if self._scaled_background_size != self.size():
+            self._scaled_background = self._background_pixmap.scaled(
+                self.size(),
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            self._scaled_background_size = self.size()
+        scaled = self._scaled_background
+        assert scaled is not None
+        left = (scaled.width() - self.width()) // 2
+        top = (scaled.height() - self.height()) // 2
+        source = scaled.rect().adjusted(left, top, -left, -top)
+        painter = QPainter(self)
+        painter.drawPixmap(self.rect(), scaled, source)
+        overlay = QColor(
+            "#e9f5ff"
+            if self.theme_manager.current_theme is ThemeId.LIGHT
+            else "#12132e"
+        )
+        overlay.setAlpha(
+            55 if self.theme_manager.current_theme is ThemeId.LIGHT else 90
+        )
+        painter.fillRect(self.rect(), overlay)
 
     @property
     def unsaved_changes(self) -> bool:
@@ -508,6 +559,7 @@ class MainWindow(QMainWindow):
         self.skill_list.currentItemChanged.connect(self._on_skill_selected)
 
         self.editor_stack = QStackedWidget()
+        self.editor_stack.setObjectName("skillEditorStack")
         no_selection = QLabel("左の一覧からスキルを選択してください")
         no_selection.setAlignment(Qt.AlignmentFlag.AlignCenter)
         no_selection.setObjectName("mutedText")
@@ -516,9 +568,20 @@ class MainWindow(QMainWindow):
         editor_scroll.setWidgetResizable(True)
         editor_scroll.setFrameShape(QFrame.Shape.NoFrame)
         editor_scroll.setWidget(self.editor_stack)
+        self.editor_stack.setAutoFillBackground(False)
+        editor_scroll.setAutoFillBackground(False)
+        editor_scroll.viewport().setAutoFillBackground(False)
+        editor_scroll.viewport().setProperty("glassViewport", True)
+
+        self.skill_list_card = QFrame()
+        self.skill_list_card.setObjectName("skillListCard")
+        skill_list_layout = QVBoxLayout(self.skill_list_card)
+        skill_list_layout.setContentsMargins(10, 10, 10, 10)
+        skill_list_layout.addWidget(self.skill_list)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(self.skill_list)
+        splitter.setHandleWidth(12)
+        splitter.addWidget(self.skill_list_card)
         splitter.addWidget(editor_scroll)
         splitter.setChildrenCollapsible(False)
         splitter.setStretchFactor(0, 0)
@@ -527,8 +590,10 @@ class MainWindow(QMainWindow):
 
         skill_page = QWidget()
         skill_layout = QVBoxLayout(skill_page)
-        skill_layout.setContentsMargins(0, 0, 0, 0)
+        skill_page.setObjectName("skillPage")
+        skill_layout.setContentsMargins(12, 12, 12, 12)
         skill_layout.addWidget(splitter)
+        self.skill_page = skill_page
 
         self.personality_editor = PersonalityEditorWidget(self.personality_catalog)
         self.personality_editor.changed.connect(self._recalculate_changes)
@@ -536,6 +601,10 @@ class MainWindow(QMainWindow):
         personality_scroll.setWidgetResizable(True)
         personality_scroll.setFrameShape(QFrame.Shape.NoFrame)
         personality_scroll.setWidget(self.personality_editor)
+        self.personality_editor.setAutoFillBackground(False)
+        personality_scroll.setAutoFillBackground(False)
+        personality_scroll.viewport().setAutoFillBackground(False)
+        personality_scroll.viewport().setProperty("glassViewport", True)
 
         self.character_details_editor = CharacterDetailsWidget()
         self.character_details_editor.changed.connect(self._recalculate_changes)
@@ -543,9 +612,16 @@ class MainWindow(QMainWindow):
             self._replace_icon
         )
         details_scroll = QScrollArea()
+        details_scroll.setObjectName("basicDetailsScroll")
         details_scroll.setWidgetResizable(True)
         details_scroll.setFrameShape(QFrame.Shape.NoFrame)
         details_scroll.setWidget(self.character_details_editor)
+        self.character_details_editor.setAutoFillBackground(False)
+        details_scroll.setAutoFillBackground(False)
+        details_scroll.viewport().setObjectName("basicDetailsViewport")
+        details_scroll.viewport().setAutoFillBackground(False)
+        details_scroll.viewport().setProperty("glassViewport", True)
+        self.basic_scroll = details_scroll
 
         self.status_editor = StatusEditorWidget()
         self.status_editor.changed.connect(self._recalculate_changes)
@@ -553,11 +629,18 @@ class MainWindow(QMainWindow):
         status_scroll.setWidgetResizable(True)
         status_scroll.setFrameShape(QFrame.Shape.NoFrame)
         status_scroll.setWidget(self.status_editor)
+        self.status_editor.setAutoFillBackground(False)
+        status_scroll.setAutoFillBackground(False)
+        status_scroll.viewport().setAutoFillBackground(False)
+        status_scroll.viewport().setProperty("glassViewport", True)
+        self.glass_scrolls = (details_scroll, status_scroll, editor_scroll, personality_scroll)
 
         self.memory_editor = MemoryEditorWidget(self._generation_inputs)
+        self.memory_editor.setAutoFillBackground(False)
         self.memory_editor.changed.connect(self._recalculate_changes)
 
         self.edit_tabs = QTabWidget()
+        self.edit_tabs.setProperty("basicActive", True)
         self.basic_tab_index = self.edit_tabs.addTab(details_scroll, "基本情報")
         self.status_tab_index = self.edit_tabs.addTab(status_scroll, "ステータス")
         self.skill_tab_index = self.edit_tabs.addTab(skill_page, "スキル")
@@ -569,6 +652,8 @@ class MainWindow(QMainWindow):
             self.memory_editor,
             "思い出",
         )
+        self.edit_tabs.currentChanged.connect(self._sync_basic_pane_style)
+        self._sync_basic_pane_style(self.basic_tab_index)
 
         self.loaded_page = QWidget()
         loaded_layout = QVBoxLayout(self.loaded_page)
@@ -577,6 +662,7 @@ class MainWindow(QMainWindow):
 
         self.content_stack.addWidget(self.empty_page)
         self.content_stack.addWidget(self.loaded_page)
+        self.content_stack.currentChanged.connect(self._sync_window_background)
 
     def _create_status_bar(self) -> None:
         self.status_bar = QFrame()
@@ -601,6 +687,7 @@ class MainWindow(QMainWindow):
         self.reset_button = QPushButton("変更を破棄")
         self.reset_button.clicked.connect(self.reset_edits)
         self.save_button = QPushButton("別名で保存")
+        self.save_button.setProperty("role", "primary")
         self.save_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton))
         self.save_button.clicked.connect(self.save_action.trigger)
 
@@ -657,6 +744,25 @@ class MainWindow(QMainWindow):
         self.appearance_action_group.triggered.connect(self._apply_selected_theme)
         self._sync_theme_actions()
 
+        background_menu = view_menu.addMenu("背景")
+        self.basic_background_action_group = QActionGroup(self)
+        self.basic_background_action_group.setExclusive(True)
+        self.basic_background_actions: dict[BasicBackgroundMode, QAction] = {}
+        for mode, label in (
+            (BasicBackgroundMode.NONE, "背景なし"),
+            (BasicBackgroundMode.IMAGE, "背景あり"),
+        ):
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setData(mode.value)
+            action.setChecked(mode is self.basic_background_mode)
+            self.basic_background_action_group.addAction(action)
+            background_menu.addAction(action)
+            self.basic_background_actions[mode] = action
+        self.basic_background_action_group.triggered.connect(
+            self._save_basic_background
+        )
+
         startup_display_menu = view_menu.addMenu("起動時の表示(&S)")
         self.startup_display_action_group = QActionGroup(self)
         self.startup_display_action_group.setExclusive(True)
@@ -684,6 +790,59 @@ class MainWindow(QMainWindow):
         theme = ThemeId(str(action.data()))
         result = self.theme_manager.apply_theme(theme)
         self._sync_theme_actions(result.applied)
+        self._sync_window_background()
+
+    def _sync_basic_pane_style(self, index: int) -> None:
+        self.edit_tabs.setProperty("basicActive", index == self.basic_tab_index)
+        refresh_widget_style(self.edit_tabs)
+        if self.centralWidget() is not None:
+            self._sync_window_background()
+
+    def _save_basic_background(self, action: QAction) -> None:
+        self.basic_background_mode = BasicBackgroundMode(str(action.data()))
+        save_basic_background(self.theme_manager.settings, self.basic_background_mode)
+        self._sync_window_background()
+
+    def _sync_window_background(self, _index: int = 0) -> None:
+        requested = (
+            self.basic_background_mode is BasicBackgroundMode.IMAGE
+            and self.theme_manager.current_theme is not ThemeId.HIGH_CONTRAST
+            and self.content_stack.currentWidget() is self.loaded_page
+        )
+        if requested and self._background_pixmap is None:
+            self._background_pixmap = QPixmap(
+                str(resource_path("assets/basic-background-blurred.png"))
+            )
+        self._background_visible = (
+            requested
+            and self._background_pixmap is not None
+            and not self._background_pixmap.isNull()
+        )
+        for widget in (
+            self.centralWidget(),
+            self.menuBar(),
+            self.summary_panel,
+            self.status_bar,
+            self.edit_tabs,
+            self.skill_page,
+            self.editor_stack,
+            self.status_editor,
+            self.personality_editor,
+            self.memory_editor,
+            *self.glass_scrolls,
+            *(scroll.viewport() for scroll in self.glass_scrolls),
+        ):
+            widget.setProperty("backgroundEnabled", self._background_visible)
+            refresh_widget_style(widget)
+        for card in self.edit_tabs.findChildren(QFrame):
+            if card.objectName() in {
+                "editorPanel", "pickerPanel", "statusCard", "skillListCard",
+                "memoryListCard", "memoryEditorCard",
+            }:
+                card.setProperty("backgroundEnabled", self._background_visible)
+                refresh_widget_style(card)
+        self.character_details_editor.set_background_enabled(self._background_visible)
+        self.update()
 
     def _sync_theme_actions(self, theme: ThemeId | None = None) -> None:
         selected = theme or self.theme_manager.current_theme

@@ -30,6 +30,7 @@ from saga_seeker_skill_editor.gui.image_pipeline import (
     ImageSafetyError,
     inspect_image_bytes,
 )
+from saga_seeker_skill_editor.gui.theme_manager import refresh_widget_style
 
 
 PROFILE_LABELS = {
@@ -152,46 +153,97 @@ class CharacterDetailsWidget(QWidget):
         self.preview_button.clicked.connect(self.show_icon_preview)
         self.replace_icon_button = QPushButton("画像を差し替える")
         self.replace_icon_button.clicked.connect(self.replace_icon_requested)
-        icon_buttons = QHBoxLayout()
-        icon_buttons.addWidget(self.preview_button)
+        icon_buttons = QVBoxLayout()
+        icon_buttons.setSpacing(8)
         icon_buttons.addWidget(self.replace_icon_button)
+        icon_buttons.addWidget(self.preview_button)
 
-        icon_layout = QVBoxLayout()
-        icon_layout.addWidget(self.icon_preview)
-        icon_layout.addLayout(icon_buttons)
-        icon_layout.addStretch(1)
+        self.identity_card = QFrame()
+        self.identity_card.setObjectName("basicIdentityCard")
+        identity_layout = QVBoxLayout(self.identity_card)
+        identity_layout.setContentsMargins(18, 16, 18, 18)
+        identity_layout.setSpacing(8)
+        identity_heading = QLabel("キャラクター")
+        identity_heading.setObjectName("cardHeading")
+        name_label = QLabel("名前")
+        name_label.setObjectName("fieldLabel")
+        name_label.setBuddy(self.name_edit)
+        identity_layout.addWidget(identity_heading)
+        identity_layout.addWidget(self.section_message)
+        identity_layout.addWidget(name_label)
+        identity_layout.addLayout(name_row)
 
-        details = QVBoxLayout()
-        details.addWidget(self.section_message)
-        details.addLayout(name_row)
-        details.addLayout(comparison_command_row)
-        details.addWidget(self.comparison_host)
-        details.addWidget(self.profile_accordion, 1)
+        self.profile_card = QFrame()
+        self.profile_card.setObjectName("basicProfileCard")
+        profile_layout = QVBoxLayout(self.profile_card)
+        profile_layout.setContentsMargins(18, 16, 18, 18)
+        profile_layout.setSpacing(12)
+        profile_heading = QLabel("プロフィール")
+        profile_heading.setObjectName("cardHeading")
+        profile_layout.addWidget(profile_heading)
+        profile_layout.addLayout(comparison_command_row)
+        profile_layout.addWidget(self.comparison_host)
+        profile_layout.addWidget(self.profile_accordion, 1)
 
         details_widget = QWidget()
-        details_widget.setLayout(details)
-        icon_widget = QWidget()
-        icon_widget.setLayout(icon_layout)
+        details_layout = QVBoxLayout(details_widget)
+        details_layout.setContentsMargins(0, 0, 0, 0)
+        details_layout.setSpacing(12)
+        details_layout.addWidget(self.identity_card)
+        details_layout.addWidget(self.profile_card, 1)
+
+        self.image_card = QFrame()
+        self.image_card.setObjectName("basicImageCard")
+        icon_layout = QVBoxLayout(self.image_card)
+        icon_layout.setContentsMargins(16, 16, 16, 18)
+        icon_layout.setSpacing(10)
+        icon_heading = QLabel("キャラクター画像")
+        icon_heading.setObjectName("cardHeading")
+        icon_layout.addWidget(icon_heading)
+        icon_layout.addWidget(self.icon_preview)
+        icon_layout.addLayout(icon_buttons)
+
+        icon_host = QWidget()
+        icon_host_layout = QVBoxLayout(icon_host)
+        icon_host_layout.setContentsMargins(0, 0, 0, 0)
+        icon_host_layout.addWidget(self.image_card)
+        icon_host_layout.addStretch(1)
 
         self.content_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.content_splitter.setObjectName("basicContentSplitter")
         self.content_splitter.setChildrenCollapsible(False)
+        self.content_splitter.setHandleWidth(12)
         self.content_splitter.addWidget(details_widget)
-        self.content_splitter.addWidget(icon_widget)
+        self.content_splitter.addWidget(icon_host)
         self.content_splitter.setCollapsible(0, False)
         self.content_splitter.setCollapsible(1, False)
         self.content_splitter.setStretchFactor(0, 3)
         self.content_splitter.setStretchFactor(1, 1)
         self.content_splitter.setSizes([900, 300])
 
+        self.glass_layer = QFrame()
+        self.glass_layer.setObjectName("basicGlassLayer")
+        self.glass_layer.setProperty("backgroundEnabled", False)
+        glass_layout = QVBoxLayout(self.glass_layer)
+        glass_layout.setContentsMargins(10, 10, 10, 10)
+        glass_layout.addWidget(self.content_splitter)
+
         root_layout = QVBoxLayout(self)
-        root_layout.setContentsMargins(0, 0, 0, 0)
-        root_layout.addWidget(self.content_splitter)
+        root_layout.setContentsMargins(12, 12, 12, 12)
+        root_layout.addWidget(self.glass_layer)
 
         self.name_edit.textEdited.connect(self._name_edited)
         for key, edit in self.profile_edits.items():
             edit.textChanged.connect(
                 lambda key=key: self._profile_edited(key)
             )
+
+    def set_background_enabled(self, enabled: bool) -> None:
+        self.glass_layer.setProperty("backgroundEnabled", enabled)
+        refresh_widget_style(self.glass_layer)
+        for card in (self.identity_card, self.profile_card, self.image_card):
+            card.setProperty("backgroundEnabled", enabled)
+            refresh_widget_style(card)
 
     def _set_profile_expanded(self, key: str, expanded: bool) -> None:
         body = self.profile_bodies.get(key)

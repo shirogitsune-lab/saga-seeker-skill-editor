@@ -121,9 +121,11 @@ jobs:
           if (Test-Path "dist/SagaSeekerSkillEditor/user-guide-assets") {
             throw "onedir distribution contains obsolete guide assets"
           }
-          ./scripts/exe_smoke.ps1 `
-            -ExePath "dist/SagaSeekerSkillEditor/SagaSeekerSkillEditor.exe" `
-            -Theme light -StartupSeconds 2
+          foreach ($theme in @("light", "dark", "high_contrast")) {
+            ./scripts/exe_smoke.ps1 `
+              -ExePath "dist/SagaSeekerSkillEditor/SagaSeekerSkillEditor.exe" `
+              -Theme $theme -StartupSeconds 2
+          }
           New-Item -ItemType Directory -Force -Path work | Out-Null
           Copy-Item "dist/SagaSeekerSkillEditor" "work/ci-onedir" -Recurse
 
@@ -141,9 +143,11 @@ jobs:
           if (Test-Path "dist/user-guide-assets") {
             throw "onefile build contains obsolete guide assets"
           }
-          ./scripts/exe_smoke.ps1 `
-            -ExePath "dist/SagaSeekerSkillEditor.exe" `
-            -Theme light -StartupSeconds 2
+          foreach ($theme in @("light", "dark", "high_contrast")) {
+            ./scripts/exe_smoke.ps1 `
+              -ExePath "dist/SagaSeekerSkillEditor.exe" `
+              -Theme $theme -StartupSeconds 2
+          }
 
       - name: Assemble and verify exact release candidate
         shell: pwsh
@@ -156,14 +160,18 @@ jobs:
             "2.2.0"
           $archive = "work/release-candidate/SagaSeekerSkillEditor-v2.2.0-windows-x64-onedir.zip"
           Expand-Archive -LiteralPath $archive -DestinationPath "work/release-extracted"
-          ./scripts/exe_smoke.ps1 `
-            -ExePath "work/release-extracted/SagaSeekerSkillEditor/SagaSeekerSkillEditor.exe" `
-            -Theme light -StartupSeconds 2
+          foreach ($theme in @("light", "dark", "high_contrast")) {
+            ./scripts/exe_smoke.ps1 `
+              -ExePath "work/release-extracted/SagaSeekerSkillEditor/SagaSeekerSkillEditor.exe" `
+              -Theme $theme -StartupSeconds 2
+          }
           ./scripts/exe_image_smoke.ps1 `
             -ExePath "work/release-extracted/SagaSeekerSkillEditor/SagaSeekerSkillEditor.exe"
-          ./scripts/exe_smoke.ps1 `
-            -ExePath "work/release-candidate/SagaSeekerSkillEditor-v2.2.0-windows-x64-onefile.exe" `
-            -Theme light -StartupSeconds 2
+          foreach ($theme in @("light", "dark", "high_contrast")) {
+            ./scripts/exe_smoke.ps1 `
+              -ExePath "work/release-candidate/SagaSeekerSkillEditor-v2.2.0-windows-x64-onefile.exe" `
+              -Theme $theme -StartupSeconds 2
+          }
           ./scripts/exe_image_smoke.ps1 `
             -ExePath "work/release-candidate/SagaSeekerSkillEditor-v2.2.0-windows-x64-onefile.exe"
 
